@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Tatva Work Recorder</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <span class="dot" id="dot"></span>
+      <h1>Tatva Work</h1>
+    </header>
+
+    <div class="timer" id="timer">00:00:00</div>
+    <div class="status" id="status">Ready to record this tab.</div>
+    <div class="tab" id="tab"></div>
+
+    <button id="toggle" class="start">Start recording</button>
+
+    <p class="message warning" id="warning" hidden></p>
+    <p class="message error" id="error" hidden></p>
+    <section class="meeting" id="meeting" hidden>
+      <div class="meeting-status" id="meetingStatus"></div>
+      <div class="meeting-title" id="meetingTitle"></div>
+      <div class="meeting-detail" id="meetingDetail"></div>
+      <div class="meeting-links">
+        <a href="#" id="openDoc" hidden>Open Google Doc</a>
+        <a href="#" id="openJson" hidden>View details</a>
+        <a href="#" id="dismiss">Dismiss</a>
+      </div>
+    </section>
+
+    <p class="message info" id="lastFile" hidden></p>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -5,3 +5,6 @@ node_modules
 *.env.local
 docs/
 *.md
+**/node_modules
+server/
+extension/

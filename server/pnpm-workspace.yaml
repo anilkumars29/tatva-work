@@ -1,0 +1,7 @@
+# Own workspace root, separate from the Next.js app in the repo root.
+allowBuilds:
+  esbuild: true
+  ffmpeg-static: true
+  onnxruntime-node: true
+  protobufjs: false
+  sharp: false

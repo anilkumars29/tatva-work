@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Tatva Work — allow microphone</title>
+    <style>
+      :root {
+        --bg: #ffffff;
+        --text: #1f1f1f;
+        --muted: #5f6368;
+        --ok: #137333;
+        --err: #a50e0e;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #202124;
+          --text: #e8eaed;
+          --muted: #9aa0a6;
+          --ok: #81c995;
+          --err: #f28b82;
+        }
+      }
+      body {
+        margin: 0;
+        padding: 48px 16px;
+        background: var(--bg);
+        color: var(--text);
+        font: 16px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      }
+      main {
+        max-width: 480px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 22px;
+      }
+      p {
+        color: var(--muted);
+      }
+      #result.ok {
+        color: var(--ok);
+        font-weight: 600;
+      }
+      #result.err {
+        color: var(--err);
+        font-weight: 600;
+      }
+      button {
+        padding: 10px 16px;
+        border: 0;
+        border-radius: 8px;
+        background: #1a73e8;
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Allow microphone for Tatva Work</h1>
+      <p>
+        Tatva Work records your microphone together with the meeting audio, so both sides of the
+        conversation are captured. Chrome asks for this once.
+      </p>
+      <p id="result">Click “Allow” in Chrome’s prompt.</p>
+      <button id="retry" hidden>Ask again</button>
+    </main>
+    <script src="permission.js"></script>
+  </body>
+</html>

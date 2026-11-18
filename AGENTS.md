@@ -2,6 +2,10 @@
 
 This guide is for coding agents making changes in `agent-quickstart-nextjs`.
 
+## Tatva Work Project Brief (read first)
+
+This repo is being extended into **Tatva Work**, a voice-first agentic meeting assistant for the Build with Agora hackathon (Track 2, PS31; submission Sat 21 Nov 2026, 12:30 PM IST). Before any change, read [docs/PROJECT_BRIEF.md](docs/PROJECT_BRIEF.md). It defines the product, the required demo flow, the repo layout (`/` web app, `extension/` Chrome MV3 extension, `server/` Node + TypeScript backend), the stack, and milestone status. Work only on the current milestone unless asked, keep the brief's milestone table up to date, and treat it as authoritative where it differs from the quickstart guidance below.
+
 ## How to Load
 
 This repository uses progressive disclosure documentation. Docs live under `docs/ai/` in three levels.
