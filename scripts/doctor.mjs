@@ -28,7 +28,14 @@ if (!fs.existsSync(envPath)) {
 }
 
 const envContents = fs.readFileSync(envPath, 'utf8');
-for (const key of ['NEXT_PUBLIC_AGORA_APP_ID', 'NEXT_AGORA_APP_CERTIFICATE']) {
+for (const key of [
+  'NEXT_PUBLIC_AGORA_APP_ID',
+  'NEXT_AGORA_APP_CERTIFICATE',
+  // Murf Falcon TTS (required by app/api/invite-agent/route.ts)
+  'MURF_API_KEY',
+  'MURF_VOICE_ID',
+  'MURF_VOICE_STYLE',
+]) {
   const matcher = new RegExp(`^${key}=.+$`, 'm');
   if (!matcher.test(envContents)) {
     fail(`.env.local is missing a value for ${key}`);

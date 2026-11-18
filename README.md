@@ -179,7 +179,7 @@ NEXT_ELEVENLABS_VOICE_ID=...
 ## Troubleshooting
 
 - **Agent does not join or transcripts are missing:** run `agora project doctor --deep`.
-- **`pnpm run doctor` fails:** run `agora project env write .env.local`, then retry.
+- **`pnpm run doctor` fails:** if an Agora value is missing, run `agora project env write .env.local`; if a `MURF_*` value is missing, add it to `.env.local` by hand (that command writes only Agora credentials). Then retry.
 - **Manual clone / env values:** `agora project use <your-project>` then `agora project env write .env.local`.
 - **RTM login fails:** keep [`app/api/generate-agora-token/route.ts`](app/api/generate-agora-token/route.ts) on `RtcTokenBuilder.buildTokenWithRtm` — RTC-only tokens will not satisfy `rtm.login`.
 - **Transcript speakers inverted:** check the `uid === "0"` remap in [`components/ConversationComponent.tsx`](components/ConversationComponent.tsx).

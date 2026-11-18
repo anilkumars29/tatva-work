@@ -79,7 +79,7 @@ Requires env/project binding:
 | --- | --- | --- | --- |
 | Agent never joins | Invite route or env mismatch | `pnpm run doctor` and invite route logs | Verify the shared agent UID and invite payload |
 | Transcript missing | RTM token capability missing | Token route implementation | Ensure `buildTokenWithRtm` remains unchanged |
-| `verify` fails at doctor | Project not bound | `agora project use` output | Re-bind project and rewrite `.env.local` |
+| `verify` fails at doctor | Project not bound, or a `MURF_*` value missing | Doctor error message, `agora project use` output | Re-bind project and rewrite `.env.local`; add missing `MURF_*` values by hand |
 | Mic publishes but no agent response | Agent start failed | UI warning (`agentJoinError`) | Inspect `/api/invite-agent` response |
 
 ## Local-Only vs Deploy-Specific

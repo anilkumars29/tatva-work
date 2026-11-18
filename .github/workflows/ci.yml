@@ -29,7 +29,13 @@ jobs:
 
       - name: Create stub .env.local for doctor
         run: |
-          printf 'NEXT_PUBLIC_AGORA_APP_ID=0123456789abcdef0123456789abcdef\nNEXT_AGORA_APP_CERTIFICATE=fedcba9876543210fedcba9876543210\n' > .env.local
+          printf '%s\n' \
+            'NEXT_PUBLIC_AGORA_APP_ID=0123456789abcdef0123456789abcdef' \
+            'NEXT_AGORA_APP_CERTIFICATE=fedcba9876543210fedcba9876543210' \
+            'MURF_API_KEY=test-murf-api-key' \
+            'MURF_VOICE_ID=test-murf-voice-id' \
+            'MURF_VOICE_STYLE=Conversational' \
+            > .env.local
 
       - name: Verify (lint + typecheck + api-contracts + build)
         run: pnpm run verify
