@@ -33,7 +33,16 @@ export const config = {
   llmModel: process.env.GROQ_LLM_MODEL?.trim() || 'openai/gpt-oss-120b',
   // Transcripts longer than this are extracted part by part, then merged
   // (keeps each request under Groq free-tier tokens-per-minute limits).
-  llmMaxTranscriptChars: optionalNumber('LLM_MAX_TRANSCRIPT_CHARS', 18000),
+  // ~10k chars ≈ 3k tokens, leaving room for the prompt and a full answer.
+  llmMaxTranscriptChars: optionalNumber('LLM_MAX_TRANSCRIPT_CHARS', 10000),
+  // Upper bound on the output budget per extraction call (reasoning + JSON).
+  llmMaxCompletionTokens: optionalNumber('LLM_MAX_COMPLETION_TOKENS', 6000),
+  // Groq tokens-per-minute limit for the LLM (free tier 8000). Input plus the
+  // output budget must fit under it, so the budget shrinks for long inputs.
+  llmTpmLimit: optionalNumber('GROQ_LLM_TPM_LIMIT', 8000),
+  // gpt-oss reasoning effort: low | medium | high. 'high' hits Groq free-tier
+  // rate limits and can exhaust the output budget, so medium is the default.
+  llmReasoningEffort: process.env.GROQ_LLM_REASONING_EFFORT?.trim() || 'medium',
 
   embeddingModel: process.env.EMBEDDING_MODEL?.trim() || 'Xenova/all-MiniLM-L6-v2',
 

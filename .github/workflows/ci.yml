@@ -39,3 +39,36 @@ jobs:
 
       - name: Verify (lint + typecheck + api-contracts + build)
         run: pnpm run verify
+
+  server:
+    name: server (node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["22", "24"]
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm version comes from "packageManager" in package.json
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+          cache-dependency-path: server/pnpm-lock.yaml
+
+      # --ignore-scripts skips the ffmpeg / onnxruntime binary downloads; the
+      # typecheck and unit tests don't need them.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Unit tests (no secrets needed)
+        run: pnpm test

@@ -12,7 +12,8 @@
     "start": "tsx --env-file=.env src/index.ts",
     "typecheck": "tsc --noEmit",
     "check:env": "tsx --env-file=.env scripts/check-env.ts",
-    "test:e2e": "tsx --env-file=.env scripts/e2e.ts"
+    "test:e2e": "tsx --env-file=.env scripts/e2e.ts",
+    "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@composio/core": "^0.30.0",

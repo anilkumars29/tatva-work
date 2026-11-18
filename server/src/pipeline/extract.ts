@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { config } from '../config.js';
 import { groqPost } from '../groq.js';
+import { fixDateTime, fixDueDate, zoneOffset } from './dates.js';
 import { formatTimestamp, type Segment } from './transcribe.js';
 
 // ---- Output contract ---------------------------------------------------------
@@ -27,7 +28,7 @@ export const knowledgeSchema = z.object({
     z.object({
       topic: z.string(),
       suggested_time: nullableString, // as said, e.g. "next Tuesday afternoon"
-      suggested_datetime: nullableString, // ISO 8601 with offset when resolvable
+      suggested_datetime: nullableString, // ISO 8601 with offset; always filled (server falls back if invalid)
       people: z.array(z.string()),
     }),
   ),
@@ -58,7 +59,7 @@ const jsonSchema = obj({
   action_items: arr(obj({ task: str, owner: nstr, due: nstr, due_date: nstr })),
   stats_mentioned: arr(obj({ value: str, context: str, timestamp_sec: { type: ['number', 'null'] } })),
   key_moments: arr(obj({ timestamp_sec: { type: 'number' }, note: str })),
-  discuss_later: arr(obj({ topic: str, suggested_time: nstr, suggested_datetime: nstr, people: arr(str) })),
+  discuss_later: arr(obj({ topic: str, suggested_time: nstr, suggested_datetime: str, people: arr(str) })),
   time_saved: obj({ minutes: { type: 'number' }, breakdown: arr(obj({ task: str, minutes: { type: 'number' } })) }),
 });
 
@@ -91,10 +92,15 @@ Fields:
 - title: short, specific meeting title (max 8 words). Not "Meeting" or the tab title verbatim.
 - summary: 3-6 sentences: purpose, main outcomes, next steps.
 - decisions: things agreed or decided. context = why / constraints, or null.
-- action_items: concrete tasks someone committed to or was asked to do. owner = person's name as spoken. Speakers are unlabelled, so for "I will..." commitments infer the speaker only when the conversation makes it clear (e.g. they were just addressed by name and are answering); otherwise null. due = deadline as spoken, or null. due_date = YYYY-MM-DD if the deadline can be resolved, else null.
+- action_items: concrete tasks someone committed to or was asked to do. due = deadline as spoken, or null. due_date = YYYY-MM-DD if the deadline can be resolved, else null.
+  owner rules (speakers are unlabelled):
+  * A name said with the task is the owner: "Priya, can you send the deck?" -> Priya; "Rahul will fix the bug" -> Rahul; "Meera should update the sheet" -> Meera; "Ask Karan to check" -> Karan.
+  * "I will..." / "I'll..." -> the person who was just addressed by name and is answering (e.g. "Arjun, where are we?" then "...I will finish it by Friday" -> Arjun). If that is not clear, null.
+  * "We will..." or no name near the task -> null. Never guess from unrelated mentions.
+  Include tasks with no clear owner too (owner null), even vague ones like "someone should check the vendor contract at some point". Do NOT add an action item that only says to discuss/review/revisit something later; that belongs in discuss_later (unless someone must prepare work for it).
 - stats_mentioned: every number, amount, percentage, date-bound target or metric, with what it refers to. value = the figure as spoken (e.g. "4.5 lakh", "20%"). timestamp_sec = seconds offset where it was said, or null.
 - key_moments: 3-8 important moments (decision made, problem raised, disagreement, commitment). timestamp_sec = seconds offset.
-- discuss_later: topics explicitly parked, deferred or needing a follow-up meeting. suggested_time = when, as spoken, or null. suggested_datetime = ISO 8601 with offset (e.g. 2026-11-24T15:00:00+05:30) if resolvable, else null. people = names involved (may be empty).
+- discuss_later: EVERY topic planned for a future meeting, discussion, review or check-in, including ones that are also a decision or an action item (list them in both places). Triggers include "let's discuss X on Tuesday", "review it next week", "park this", "revisit after the launch", "sync with Priya on Friday", "follow up next month". suggested_time = when, as spoken, or null if no time was given. suggested_datetime = ALWAYS an ISO 8601 date-time with the local offset (e.g. 2026-11-24T15:00:00+05:30), using the calendar above: exact day and time if both were said; a day without a time -> 11:00 that day; "morning" -> 10:00, "afternoon" -> 15:00, "evening" -> 17:00; "next week" -> Monday of next week 11:00; "next month" -> first working day of next month 11:00; "after <event>" -> the working day after that event 11:00 if its date is known; no timing at all -> 2 working days after the meeting at 11:00. Never a weekend. people = names involved (may be empty).
 - time_saved: realistic minutes this assistant saves the team versus doing it manually: writing notes, the summary, tracking action items, drafting follow-up emails, scheduling follow-ups. Base it on meeting length and how many items there are. breakdown lists each task with its minutes; minutes = their sum.
 
 Use empty arrays when there is nothing for a field.`;
@@ -104,12 +110,24 @@ function transcriptLines(segments: Segment[]): string {
   return segments.map((s) => `[${formatTimestamp(s.start)}] ${s.text}`).join('\n');
 }
 
-async function callLlm(system: string, user: string): Promise<Knowledge> {
+// Groq counts input + max_completion_tokens against the tokens-per-minute
+// limit before running (free tier: 8000 TPM), so size the output budget to fit.
+function completionBudget(system: string, user: string): number {
+  const estimatedInput = Math.ceil((system.length + user.length) / 3.2);
+  const fits = config.llmTpmLimit - estimatedInput - 300;
+  return Math.max(1024, Math.min(config.llmMaxCompletionTokens, fits));
+}
+
+async function callLlmOnce(system: string, user: string): Promise<Knowledge> {
+  const maxCompletionTokens = completionBudget(system, user);
   const response = (await groqPost('/chat/completions', () => ({
     json: true,
     body: JSON.stringify({
       model: config.llmModel,
-      temperature: 0.2,
+      temperature: 0,
+      // gpt-oss spends part of the budget on reasoning; leave room for the JSON.
+      max_completion_tokens: maxCompletionTokens,
+      reasoning_effort: config.llmReasoningEffort,
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user },
@@ -124,6 +142,19 @@ async function callLlm(system: string, user: string): Promise<Knowledge> {
   const content = response.choices?.[0]?.message?.content;
   if (!content) throw new Error('LLM returned an empty response.');
   return knowledgeSchema.parse(JSON.parse(content));
+}
+
+// Structured output occasionally fails validation (e.g. truncated); one retry
+// usually succeeds.
+async function callLlm(system: string, user: string): Promise<Knowledge> {
+  try {
+    return await callLlmOnce(system, user);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!/json_validate_failed|max completion tokens|JSON|ZodError|invalid_type/i.test(message)) throw err;
+    console.warn(`[extract] invalid structured output, retrying once: ${message.slice(0, 160)}`);
+    return callLlmOnce(system, user);
+  }
 }
 
 // Splits segments into parts of at most `maxChars` transcript characters.
@@ -143,6 +174,25 @@ function splitSegments(segments: Segment[], maxChars: number): Segment[][] {
   }
   if (current.length) parts.push(current);
   return parts;
+}
+
+function isValidSuggestion(value: string | null): boolean {
+  if (!value || Number.isNaN(Date.parse(value))) return false;
+  const weekday = new Intl.DateTimeFormat('en-US', { timeZone: config.timeZone, weekday: 'short' }).format(new Date(value));
+  return weekday !== 'Sat' && weekday !== 'Sun';
+}
+
+/** Fallback: 2 working days after the meeting, 11:00 local time. */
+function defaultFollowUp(recordedAt: Date): string {
+  const ymd = new Intl.DateTimeFormat('en-CA', { timeZone: config.timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
+  const weekday = new Intl.DateTimeFormat('en-US', { timeZone: config.timeZone, weekday: 'short' });
+  let day = new Date(recordedAt.getTime());
+  let workingDays = 0;
+  while (workingDays < 2) {
+    day = new Date(day.getTime() + 86_400_000);
+    if (!['Sat', 'Sun'].includes(weekday.format(day))) workingDays++;
+  }
+  return `${ymd.format(day)}T11:00:00${zoneOffset(day)}`;
 }
 
 export interface MeetingMeta {
@@ -182,5 +232,15 @@ export async function extractKnowledge(segments: Segment[], meta: MeetingMeta): 
   const cap = Math.round(meta.durationMinutes * 3 + 60);
   const minutes = Math.min(Math.max(0, Math.round(knowledge.time_saved.minutes)), cap);
   knowledge.time_saved = { ...knowledge.time_saved, minutes };
+
+  // Check resolved dates against what was said (weekday maths), then make sure
+  // every discuss-later item has a usable suggested date/time.
+  for (const item of knowledge.action_items) {
+    item.due_date = fixDueDate(item.due_date, item.due, meta.recordedAt);
+  }
+  for (const item of knowledge.discuss_later) {
+    item.suggested_datetime = fixDateTime(item.suggested_datetime, item.suggested_time, meta.recordedAt);
+    if (!isValidSuggestion(item.suggested_datetime)) item.suggested_datetime = defaultFollowUp(meta.recordedAt);
+  }
   return knowledge;
 }

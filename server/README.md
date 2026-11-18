@@ -13,7 +13,7 @@ immediately. Processing runs in the background, one meeting at a time:
 | ------ | ------------ |
 | `uploaded` | Audio stored in Supabase Storage (`meeting-audio/<id>/recording.webm`) |
 | `transcribing` | Groq Whisper `whisper-large-v3-turbo`, segment timestamps. Files over 24 MB are split with ffmpeg into 10-minute mono 16 kHz Opus chunks; timestamps are offset back to the full recording |
-| `extracting` | Groq `openai/gpt-oss-120b` with strict JSON-schema output (validated with zod): title, summary, decisions, action items, stats, key moments, discuss-later, time saved. Transcripts over ~18k chars are extracted in parts and merged (fits free-tier token limits). Saved to Supabase |
+| `extracting` | Groq `openai/gpt-oss-120b` with strict JSON-schema output (validated with zod): title, summary, decisions, action items, stats, key moments, discuss-later, time saved. Transcripts over ~10k chars are extracted in parts and merged; the output budget is sized per request to fit Groq's tokens-per-minute limit (`GROQ_LLM_TPM_LIMIT`, free tier 8000). Saved to Supabase |
 | `indexing` | Chunks (summary, each item, ~900-char transcript windows) embedded locally with transformers.js `Xenova/all-MiniLM-L6-v2` (384 dims) into pgvector; Google Doc "Tatva: <title> (<date>)" created via Composio |
 | `ready` / `failed` | `failed` stores the error. Storage and Google Doc problems are not fatal; they're recorded in `warnings` |
 
@@ -50,6 +50,7 @@ immediately. Processing runs in the background, one meeting at a time:
 pnpm run dev         # http://localhost:4000, restarts on file changes
 pnpm run test:e2e -- "<path to a recording.webm>" ["search question"]
 pnpm run typecheck
+pnpm test            # unit tests for date resolution (no secrets needed; also run in CI)
 ```
 
 The first start downloads the embedding model (~90 MB) into
@@ -59,5 +60,16 @@ The first start downloads the embedding model (~90 MB) into
 
 - One meeting is processed at a time. If the server restarts mid-pipeline,
   that meeting is marked `failed` on startup; use the retry endpoint.
-- Speakers are not labelled (Whisper has no diarization), so owners for
-  "I will…" items are only filled in when the conversation makes them clear.
+- **Owners.** Speakers are not labelled (Whisper has no diarization). An action
+  item gets an owner when a name is said with it ("Priya, can you…", "Rahul
+  will…", "Meera should…"); otherwise it stays unassigned. "I will…" right
+  after someone is addressed by name is sometimes attributed to them, not always.
+- **Discuss later.** Every topic planned for a future meeting or review goes into
+  `discuss_later`, even if it is also a decision or action item, and always gets
+  a suggested date/time: the spoken time when given; otherwise defaults (a day
+  alone → 11:00, morning 10:00, afternoon 15:00, "next week" → Monday 11:00, no
+  timing → 2 working days later at 11:00, never a weekend).
+  `suggested_time_text` keeps what was actually said (null = the time is a default).
+- **Date checks.** The LLM resolves relative dates, then
+  [src/pipeline/dates.ts](src/pipeline/dates.ts) checks them against the spoken
+  phrase and fixes weekday mistakes (e.g. "Monday" resolved to a Sunday).
