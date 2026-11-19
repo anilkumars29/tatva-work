@@ -279,6 +279,7 @@ export async function prepareAction(kind: ActionKind, input: Record<string, unkn
           due: str(input.due) ?? null,
           meeting_id: meeting?.id ?? null,
           meeting: meeting?.title ?? null,
+          source: input.source === 'web' ? 'web' : 'voice',
         },
         summary: `I'll log the issue "${title}"${who} in the tracker${escalate}. Shall I go ahead?`,
       };
@@ -412,7 +413,7 @@ export async function runAction(kind: ActionKind, a: Record<string, unknown>): P
           context: a.context ?? null,
           due_text: a.due ?? null,
           kind: 'issue',
-          source: 'voice',
+          source: a.source === 'web' ? 'web' : 'voice',
           meeting_id: a.meeting_id ?? null,
         })
         .select('id')

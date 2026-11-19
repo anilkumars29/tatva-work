@@ -11,6 +11,9 @@ export interface MeetingRow {
   duration_seconds: number | null;
   time_saved_minutes: number | null;
   action_count: number;
+  summary?: string | null;
+  gdoc_url?: string | null;
+  indexed_at?: string | null;
 }
 
 export interface PendingItem {
@@ -94,3 +97,44 @@ export const TOOL_LABELS: Record<string, string> = {
   log_issue: 'Issues',
   create_google_doc: 'Docs',
 };
+
+export interface DocumentRow {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  name: string;
+  bytes: number | null;
+  pages: number | null;
+  status: 'processing' | 'ready' | 'failed';
+  error: string | null;
+  summary: string | null;
+  chunk_count: number;
+}
+
+export interface SearchResult {
+  kind: 'meeting' | 'document';
+  id: string;
+  title: string;
+  date: string | null;
+  source_type: string;
+  page: number | null;
+  content: string;
+  similarity: number;
+}
+
+export interface TrackerItem {
+  id: string;
+  task: string;
+  owner: string | null;
+  due_text: string | null;
+  due_date: string | null;
+  status: 'open' | 'done';
+  kind: 'task' | 'issue';
+  context: string | null;
+  source: 'meeting' | 'voice' | 'web';
+  created_at: string;
+  updated_at: string;
+  meeting_id: string | null;
+  meeting: string | null;
+  meeting_date: string | null;
+}

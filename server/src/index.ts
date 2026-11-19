@@ -5,6 +5,7 @@ import { config } from './config.js';
 import { warmUpEmbeddings } from './pipeline/embed.js';
 import { appRouter } from './routes/app.js';
 import { chatRouter } from './routes/chat.js';
+import { knowledgeRouter } from './routes/knowledge.js';
 import { meetingsRouter } from './routes/meetings.js';
 import { supabase } from './supabase.js';
 
@@ -36,6 +37,7 @@ app.get('/health', (_req, res) => {
 
 app.use('/api', meetingsRouter);
 app.use('/api', appRouter);
+app.use('/api', knowledgeRouter);
 app.use('/v1', chatRouter);
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {

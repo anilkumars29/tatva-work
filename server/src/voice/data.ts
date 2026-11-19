@@ -135,13 +135,17 @@ export async function searchKnowledge(
   });
   if (error) throw new Error(`Knowledge search: ${error.message}`);
   const meetings = await recentMeetings();
-  const titleOf = (id: string | null) => {
-    const m = meetings.find((x) => x.id === id);
-    return m ? `${m.title ?? 'Untitled'} (${dayLabel(m.recorded_at ?? m.created_at)})` : id ? 'older meeting' : 'company document';
+  const titleOf = (row: { meeting_id: string | null; metadata?: Record<string, unknown> | null }) => {
+    if (!row.meeting_id) {
+      const name = typeof row.metadata?.name === 'string' ? row.metadata.name : null;
+      return name ? `document "${name}"${typeof row.metadata?.page === 'number' ? ` p.${row.metadata.page}` : ''}` : 'company document';
+    }
+    const m = meetings.find((x) => x.id === row.meeting_id);
+    return m ? `${m.title ?? 'Untitled'} (${dayLabel(m.recorded_at ?? m.created_at)})` : 'older meeting';
   };
-  return (data as Array<{ meeting_id: string | null; source_type: string; content: string; similarity: number }>).map((row) => ({
+  return (data as Array<{ meeting_id: string | null; source_type: string; content: string; similarity: number; metadata?: Record<string, unknown> | null }>).map((row) => ({
     meeting_id: row.meeting_id,
-    meeting: titleOf(row.meeting_id),
+    meeting: titleOf(row),
     source_type: row.source_type,
     content: row.content.length > 450 ? `${row.content.slice(0, 450)}…` : row.content,
     similarity: Math.round(row.similarity * 100) / 100,

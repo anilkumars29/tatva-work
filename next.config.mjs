@@ -19,6 +19,8 @@ const nextConfig = {
     root: rootDir,
   },
   experimental: {
+    // Knowledge Base PDF uploads go through the /tatva proxy (server limit: 25 MB).
+    proxyClientMaxBodySize: '26mb',
     webpackBuildWorker: true,
     parallelServerBuildTraces: true,
     parallelServerCompiles: true,

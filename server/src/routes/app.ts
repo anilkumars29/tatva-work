@@ -55,7 +55,7 @@ appRouter.get(
     const [meetings, open, actions, contacts] = await Promise.all([
       supabase
         .from('meetings')
-        .select('id, title, source_title, status, error, recorded_at, created_at, duration_seconds, time_saved_minutes, action_items(count)')
+        .select('id, title, source_title, status, error, recorded_at, created_at, processing_finished_at, duration_seconds, time_saved_minutes, summary, gdoc_url, action_items(count)')
         .order('created_at', { ascending: false })
         .limit(100),
       supabase
@@ -106,6 +106,9 @@ appRouter.get(
         duration_seconds: m.duration_seconds,
         time_saved_minutes: m.time_saved_minutes,
         action_count: m.action_items?.[0]?.count ?? 0,
+        summary: m.summary ? (m.summary.length > 240 ? `${m.summary.slice(0, 240)}…` : m.summary) : null,
+        gdoc_url: m.gdoc_url,
+        indexed_at: m.processing_finished_at,
       })),
       pending: openRows.slice(0, 50).map((a) => ({
         id: a.id,

@@ -21,22 +21,24 @@ async function main() {
   const { supabase } = await import('../src/supabase.js');
 
   console.log('Supabase');
-  for (const table of ['meetings', 'transcript_segments', 'action_items', 'discuss_later', 'knowledge_chunks', 'contacts', 'activity_log', 'pending_actions']) {
+  for (const table of ['meetings', 'transcript_segments', 'action_items', 'discuss_later', 'knowledge_chunks', 'contacts', 'activity_log', 'pending_actions', 'documents']) {
     // A real select: HEAD requests report success even for missing tables.
     const { error } = await supabase.from(table).select('*').limit(1);
     if (error) bad(`table ${table}: ${error.message}`);
     else ok(`table ${table}`);
   }
-  const bucket = await supabase.storage.getBucket(config.audioBucket);
-  if (bucket.error) bad(`storage bucket "${config.audioBucket}": ${bucket.error.message}`);
-  else ok(`storage bucket "${config.audioBucket}"`);
+  for (const name of [config.audioBucket, 'documents']) {
+    const bucket = await supabase.storage.getBucket(name);
+    if (bucket.error) bad(`storage bucket "${name}": ${bucket.error.message}`);
+    else ok(`storage bucket "${name}"`);
+  }
   const rpc = await supabase.rpc('match_knowledge_chunks', {
     query_embedding: JSON.stringify(new Array(384).fill(0.01)),
     match_count: 1,
   });
   if (rpc.error) bad(`function match_knowledge_chunks: ${rpc.error.message}`);
   else ok('function match_knowledge_chunks');
-  if (failures) console.log('  → Run server/supabase/migrations/001_init.sql and 002_voice_agent.sql in the Supabase SQL editor.');
+  if (failures) console.log('  → Run server/supabase/migrations/001_init.sql 002_voice_agent.sql and 003_web_app.sql in the Supabase SQL editor.');
 
   console.log('Groq');
   const models = await fetch('https://api.groq.com/openai/v1/models', {
