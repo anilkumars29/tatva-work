@@ -96,8 +96,12 @@ Defined in [`env.local.example`](env.local.example).
 | `MURF_API_KEY`               |    ✅    | Murf API key for Falcon TTS. **Server-side only.**               |
 | `MURF_VOICE_ID`              |    ✅    | Murf voice ID for an Indian English (`en-IN`) voice, e.g. Pooja. |
 | `MURF_VOICE_STYLE`           |    ✅    | Murf voice style for that voice, e.g. `Conversational`.         |
+| `CUSTOM_LLM_URL`             |    ➖    | Tatva server's `/v1/chat/completions` via the cloudflared tunnel (written by `pnpm run tunnel` in `server/`). Unset = managed `gpt-4o-mini` fallback with no tools. |
+| `CUSTOM_LLM_API_KEY`         |    ➖    | Bearer token Agora sends to the custom LLM; must equal `VOICE_LLM_API_KEY` in `server/.env`. **Server-side only.** |
 
-The agent configuration in [`app/api/invite-agent/route.ts`](app/api/invite-agent/route.ts) uses Agora-managed Deepgram STT (`nova-3`, `en-IN`) and OpenAI LLM, and Murf Falcon TTS with your own Murf key (BYOK): model `FALCON`, locale `en-IN`, 24 kHz, streamed from `wss://global.api.murf.ai/v1/speech/stream-input`. The route fails with a clear `Missing required environment variable` error if any `MURF_*` value is unset.
+The agent configuration in [`app/api/invite-agent/route.ts`](app/api/invite-agent/route.ts) uses Agora-managed Deepgram STT (`nova-3`, `en-IN`), the Tatva custom LLM when `CUSTOM_LLM_URL` is set (otherwise Agora-managed OpenAI `gpt-4o-mini`), and Murf Falcon TTS with your own Murf key (BYOK): model `FALCON`, locale `en-IN`, 24 kHz, streamed from `wss://global.api.murf.ai/v1/speech/stream-input`. The route fails with a clear `Missing required environment variable` error if any `MURF_*` value is unset.
+
+For Tatva Work the LLM is the `server/` backend (RAG over meetings, Composio actions, confirm-before-acting). The route passes the channel name as the `X-Tatva-Session` header so each call keeps its own pending confirmation. See [server/README.md](server/README.md#voice-agent-milestone-3) for running web app + server + tunnel.
 
 ## Commands
 

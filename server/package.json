@@ -13,7 +13,10 @@
     "typecheck": "tsc --noEmit",
     "check:env": "tsx --env-file=.env scripts/check-env.ts",
     "test:e2e": "tsx --env-file=.env scripts/e2e.ts",
-    "test": "tsx --test test/*.test.ts"
+    "test": "tsx --test test/*.test.ts",
+    "seed:contacts": "tsx --env-file=.env scripts/seed-contacts.ts",
+    "tunnel": "tsx --env-file=.env scripts/tunnel.ts",
+    "test:voice": "tsx --env-file=.env scripts/voice-demo.ts"
   },
   "dependencies": {
     "@composio/core": "^0.30.0",

@@ -33,6 +33,7 @@ agora project doctor --deep
 - `MURF_API_KEY`: Murf API key for Falcon TTS (server only).
 - `MURF_VOICE_ID`: Murf voice ID for an `en-IN` voice (e.g. Pooja).
 - `MURF_VOICE_STYLE`: Murf voice style (e.g. `Conversational`).
+- Optional `CUSTOM_LLM_URL` + `CUSTOM_LLM_API_KEY`: route the agent's LLM to the Tatva server (`server/`) through a cloudflared tunnel (`pnpm run tunnel` in `server/` writes the URL). See `server/README.md`.
 
 `agora project env write .env.local` writes only the Agora credentials; add the three `MURF_*` values by hand. Agent behavior defaults live in code, and other optional BYOK examples are documented later in the root README.
 

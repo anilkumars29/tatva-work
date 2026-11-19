@@ -19,7 +19,7 @@ Target file: `app/api/invite-agent/route.ts`.
 
 Typical edits:
 
-- System prompt (`ADA_PROMPT`).
+- Fallback system prompt (`POOJA_PROMPT`); with `CUSTOM_LLM_URL` set, the real prompt, RAG, and tools are in `server/src/voice/agent.ts`.
 - Greeting default (`GREETING`).
 - Shared agent UID (`DEFAULT_AGENT_UID` in `lib/agora.ts`).
 - VAD (`turnDetection.config.*`).

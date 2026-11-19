@@ -3,10 +3,21 @@ import express, { type ErrorRequestHandler } from 'express';
 import multer from 'multer';
 import { config } from './config.js';
 import { warmUpEmbeddings } from './pipeline/embed.js';
+import { chatRouter } from './routes/chat.js';
 import { meetingsRouter } from './routes/meetings.js';
 import { supabase } from './supabase.js';
 
 const app = express();
+
+// Requests through the Cloudflare tunnel (they carry cf-ray) may only reach the
+// voice endpoint and health check: the tunnel URL is public, the meeting API is not.
+app.use((req, res, next) => {
+  if (req.get('cf-ray') && !req.path.startsWith('/v1/') && req.path !== '/health') {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  next();
+});
 
 // The extension calls with host_permissions (no CORS needed); this allows the
 // local web app and extension pages too.
@@ -23,6 +34,7 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/api', meetingsRouter);
+app.use('/v1', chatRouter);
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   const status = err instanceof multer.MulterError ? (err.code === 'LIMIT_FILE_SIZE' ? 413 : 400) : 500;
@@ -49,6 +61,7 @@ async function failInterruptedMeetings() {
 
 app.listen(config.port, () => {
   console.log(`Tatva Work server on http://localhost:${config.port}`);
+  if (!config.voiceApiKey) console.warn('[startup] VOICE_LLM_API_KEY is not set: the voice endpoint /v1/chat/completions is disabled.');
   failInterruptedMeetings();
   warmUpEmbeddings()
     .then(() => console.log('[startup] Embedding model ready'))

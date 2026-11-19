@@ -49,6 +49,18 @@ export const config = {
   composioApiKey: required('COMPOSIO_API_KEY'),
   composioUserId: process.env.COMPOSIO_USER_ID?.trim() || 'hack_user',
 
+  // ---- Voice agent (custom LLM for Agora Conversational AI) ----
+  // Shared secret Agora sends as "Authorization: Bearer <key>". The endpoint
+  // refuses requests while this is unset, because the tunnel makes it public.
+  voiceApiKey: process.env.VOICE_LLM_API_KEY?.trim() || '',
+  voiceModel: process.env.VOICE_LLM_MODEL?.trim() || 'openai/gpt-oss-120b',
+  voiceReasoningEffort: process.env.VOICE_LLM_REASONING_EFFORT?.trim() || 'low',
+  voiceMaxTokens: optionalNumber('VOICE_LLM_MAX_TOKENS', 500),
+  slackChannel: process.env.SLACK_CHANNEL?.trim() || '#hack',
+  trackerSheetName: process.env.TRACKER_SHEET_NAME?.trim() || 'Tatva Tracker',
+  // Optional: skip the Drive search for the tracker sheet.
+  trackerSpreadsheetId: process.env.TRACKER_SPREADSHEET_ID?.trim() || '',
+
   maxUploadBytes: optionalNumber('MAX_UPLOAD_BYTES', 200 * 1024 * 1024),
   timeZone: process.env.TZ_DISPLAY?.trim() || 'Asia/Kolkata',
 };

@@ -65,6 +65,8 @@ Required:
 - `MURF_VOICE_ID`
 - `MURF_VOICE_STYLE`
 
+Optional: `CUSTOM_LLM_URL` and `CUSTOM_LLM_API_KEY` (server only). When `CUSTOM_LLM_URL` is set, `CUSTOM_LLM_API_KEY` is required and the agent's LLM is the Tatva server's OpenAI-compatible SSE endpoint, called with `Authorization: Bearer <key>` and `X-Tatva-Session: <channel_name>`.
+
 This is the complete base `.env.local` contract. `POST /api/invite-agent` returns 500 with `Missing required environment variable: <name>` if any of these is unset. The optional BYOK route and provider snippets use additional variables only when a developer explicitly enables them.
 
 ## Test Coverage for Interfaces

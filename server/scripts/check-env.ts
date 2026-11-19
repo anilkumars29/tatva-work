@@ -21,7 +21,7 @@ async function main() {
   const { supabase } = await import('../src/supabase.js');
 
   console.log('Supabase');
-  for (const table of ['meetings', 'transcript_segments', 'action_items', 'discuss_later', 'knowledge_chunks']) {
+  for (const table of ['meetings', 'transcript_segments', 'action_items', 'discuss_later', 'knowledge_chunks', 'contacts', 'activity_log', 'pending_actions']) {
     // A real select: HEAD requests report success even for missing tables.
     const { error } = await supabase.from(table).select('*').limit(1);
     if (error) bad(`table ${table}: ${error.message}`);
@@ -36,7 +36,7 @@ async function main() {
   });
   if (rpc.error) bad(`function match_knowledge_chunks: ${rpc.error.message}`);
   else ok('function match_knowledge_chunks');
-  if (failures) console.log('  → Run server/supabase/migrations/001_init.sql in the Supabase SQL editor.');
+  if (failures) console.log('  → Run server/supabase/migrations/001_init.sql and 002_voice_agent.sql in the Supabase SQL editor.');
 
   console.log('Groq');
   const models = await fetch('https://api.groq.com/openai/v1/models', {
@@ -53,12 +53,18 @@ async function main() {
 
   console.log('Composio');
   const { isToolkitConnected } = await import('../src/composio.js');
-  try {
-    if (await isToolkitConnected('googledocs')) ok(`googledocs connected for user "${config.composioUserId}"`);
-    else bad(`googledocs not connected for user "${config.composioUserId}" (run hack-kit: pnpm tsx src/connect-toolkit.ts googledocs)`);
-  } catch (err) {
-    bad(`Composio: ${err instanceof Error ? err.message : err}`);
+  for (const toolkit of ['googledocs', 'gmail', 'googlecalendar', 'slack', 'googlesheets']) {
+    try {
+      if (await isToolkitConnected(toolkit)) ok(`${toolkit} connected for user "${config.composioUserId}"`);
+      else bad(`${toolkit} not connected for user "${config.composioUserId}" (run hack-kit: pnpm tsx src/connect-toolkit.ts ${toolkit})`);
+    } catch (err) {
+      bad(`Composio ${toolkit}: ${err instanceof Error ? err.message : err}`);
+    }
   }
+
+  console.log('Voice agent');
+  if (config.voiceApiKey) ok('VOICE_LLM_API_KEY set');
+  else bad('VOICE_LLM_API_KEY is empty: /v1/chat/completions is disabled');
 
   console.log('Local tools');
   if (ffmpegPath && fs.existsSync(ffmpegPath as unknown as string)) ok('ffmpeg (for chunking long recordings)');

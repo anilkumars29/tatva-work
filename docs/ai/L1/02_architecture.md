@@ -24,7 +24,7 @@ Next.js API routes
   -> agora-agents (start/stop managed agent)
 
 Agora Cloud
-  -> Agent session (Deepgram STT en-IN + OpenAI LLM + Murf Falcon TTS en-IN)
+  -> Agent session (Deepgram STT en-IN + Tatva custom LLM via tunnel, or managed OpenAI + Murf Falcon TTS en-IN)
   -> RTM payloads (transcript, state, metrics, error)
 ```
 

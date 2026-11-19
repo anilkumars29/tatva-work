@@ -10,10 +10,10 @@ All of the managed agent configuration is built in `app/api/invite-agent/route.t
 
 | Constant            | Default                                              | Purpose                                                   |
 | ------------------- | ---------------------------------------------------- | --------------------------------------------------------- |
-| `ADA_PROMPT`        | Long-form instructions for "Ada", an Agora assistant | The system prompt for the LLM.                            |
-| `GREETING`          | Friendly first line                                   | Spoken on session start.                                 |
+| `POOJA_PROMPT`      | Short "Pooja" prompt, no tools                        | System prompt for the managed-LLM fallback only.          |
+| `GREETING`          | "Hi, I'm Pooja from Tatva Work…"                      | Spoken on session start.                                 |
 
-Agent behavior is configured in code: edit `GREETING` or `ADA_PROMPT` directly.
+With `CUSTOM_LLM_URL` set, the LLM is `new OpenAI({ url: CUSTOM_LLM_URL, apiKey: CUSTOM_LLM_API_KEY, model: 'tatva-voice', headers: { 'X-Tatva-Session': channel_name } })`. The Tatva server ignores incoming system messages and builds its own prompt (`server/src/voice/agent.ts`). Without it, the route falls back to Agora-managed `gpt-4o-mini` with `POOJA_PROMPT`.
 
 ## The Agent Builder Chain
 
@@ -24,7 +24,7 @@ const client = new AgoraClient({ area: Area.US, appId, appCertificate });
 
 const agent = new Agent({
   name: `conversation-${Date.now()}-${randomHex}`,
-  instructions: ADA_PROMPT,
+  instructions: POOJA_PROMPT,
   greeting: GREETING,
   failureMessage: 'Please wait a moment.',
   maxHistory: 50,
@@ -43,13 +43,7 @@ const agent = new Agent({
   },
 })
   .withStt(new DeepgramSTT({ model: 'nova-3', language: 'en-IN' }))
-  .withLlm(new OpenAI({
-    model: 'gpt-4o-mini',
-    greetingMessage: GREETING,
-    failureMessage: 'Please wait a moment.',
-    maxHistory: 15,
-    params: { max_tokens: 1024, temperature: 0.7, top_p: 0.95 },
-  }))
+  .withLlm(llm) // Tatva custom LLM when CUSTOM_LLM_URL is set, else managed gpt-4o-mini
   .withTts(new MurfWithStyleTTS(
     {
       key: requireEnv('MURF_API_KEY'),
@@ -94,7 +88,7 @@ const agentId = await session.start();
 
 ### Change the prompt
 
-Edit `ADA_PROMPT`. Keep it under the LLM's context window — `gpt-4o-mini` handles thousands of tokens but very long prompts amplify latency.
+For the Tatva agent, edit `systemPrompt()` in `server/src/voice/agent.ts` (keep it short: Groq free tier is 8k tokens/min). `POOJA_PROMPT` in the route only affects the managed fallback.
 
 ### Change the greeting
 

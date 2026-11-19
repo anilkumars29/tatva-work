@@ -35,7 +35,7 @@ The sections below (Start Here, Patterns, Anti-Patterns, etc.) remain the canoni
 - UI components: `agora-agent-uikit` for visualizer, transcript, and mic controls
 - Server SDK: `agora-agents` for managed agent session startup
 - API routes: token generation, agent invite, chat, and stop routes live in `app/api`
-- Default agent config: Agora-managed Deepgram STT (`nova-3`, `en-IN`) and OpenAI LLM; Murf Falcon TTS (BYOK, `en-IN`); `.env.local` contains Agora project credentials plus `MURF_API_KEY`, `MURF_VOICE_ID`, and `MURF_VOICE_STYLE`
+- Default agent config: Agora-managed Deepgram STT (`nova-3`, `en-IN`); LLM is the Tatva server (`server/`, `POST /v1/chat/completions` via cloudflared) when `CUSTOM_LLM_URL` + `CUSTOM_LLM_API_KEY` are set, else Agora-managed OpenAI `gpt-4o-mini`; Murf Falcon TTS (BYOK, `en-IN`); `.env.local` contains Agora project credentials plus `MURF_API_KEY`, `MURF_VOICE_ID`, and `MURF_VOICE_STYLE`
 
 ## Supported Modes
 
@@ -61,7 +61,7 @@ The sections below (Start Here, Patterns, Anti-Patterns, etc.) remain the canoni
 ## Key Files
 
 - `app/api/generate-agora-token/route.ts`: issues RTC + RTM tokens for the browser user.
-- `app/api/invite-agent/route.ts`: starts the managed agent session; edit here for system prompt, VAD, model, or voice changes. TTS is Murf Falcon via `MurfWithStyleTTS`, a small `MurfTTS` subclass that adds `params.style` (the SDK's `MurfTTSOptions` has no `style` field).
+- `app/api/invite-agent/route.ts`: starts the managed agent session; edit here for VAD, model, or voice changes. With `CUSTOM_LLM_URL` set, the real system prompt, RAG, and tools live in `server/src/voice/` (the route's `POOJA_PROMPT` is only the no-tools fallback). TTS is Murf Falcon via `MurfWithStyleTTS`, a small `MurfTTS` subclass that adds `params.style` (the SDK's `MurfTTSOptions` has no `style` field).
 - `app/api/stop-conversation/route.ts`: stops the agent session.
 - `app/api/chat/completions/route.ts`: optional OpenAI-compatible SSE proxy for a custom LLM (not wired by default).
 - `components/LandingPage.tsx`: session bootstrap, RTM setup, provider wiring, and conversation lifecycle.

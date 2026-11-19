@@ -14,6 +14,8 @@
 - Do not expose BYOK provider API keys to client bundles.
 - Store secrets in `.env.local` for dev and deployment secret store in Vercel.
 - `env.local.example` documents expected keys without real values.
+- `CUSTOM_LLM_API_KEY` (web) / `VOICE_LLM_API_KEY` (server) is a shared secret: the cloudflared quick-tunnel URL is public, so the server rejects `/v1/chat/completions` without it and serves only `/v1/*` and `/health` to tunnelled requests (`cf-ray` header).
+- Send/create actions (email, Slack, calendar, tracker) run only after a spoken "yes" to the server's read-back (`pending_actions`); every tool call is logged in `activity_log`.
 
 ## Token Security Model
 

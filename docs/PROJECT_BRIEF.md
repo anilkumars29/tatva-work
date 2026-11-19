@@ -74,7 +74,8 @@ Tatva Work is a voice-first, agentic meeting assistant for teams.
 | Voice agent        | Agora Conversational AI (existing app), Murf Falcon TTS (voice Pooja, `en-IN`), Deepgram STT `en-IN` |
 | Server             | Node + TypeScript, Express 5, `http://localhost:4000` (see `server/README.md`) |
 | Transcription      | Groq Whisper `whisper-large-v3-turbo` (segment timestamps; ffmpeg chunking for files over 24 MB) |
-| LLM                | Groq `openai/gpt-oss-120b` with strict JSON-schema output |
+| LLM                | Groq `openai/gpt-oss-120b` with strict JSON-schema output (extraction); same model, reasoning `low`, with tool calling as the voice agent's custom LLM (`server/` `POST /v1/chat/completions`, fallback `gpt-oss-20b` on rate limits) |
+| Tunnel (localhost) | Cloudflare quick tunnel (`cloudflared`, `pnpm run tunnel` in `server/`) so Agora's cloud reaches `localhost:4000` |
 | Embeddings         | Local transformers.js `Xenova/all-MiniLM-L6-v2` (384 dims, no API key), stored in pgvector |
 | DB / vectors / files | Supabase (Postgres + pgvector + Storage) |
 | Actions            | Composio (Gmail, Google Calendar, Slack, Google Sheets, Google Docs), `user_id` = `"hack_user"` |
@@ -89,6 +90,7 @@ never be hardcoded or committed.
 | - | --------- | ------ |
 | 1 | `extension/`: popup Start/Stop + timer; record tab audio + mic mixed via `chrome.tabCapture` + offscreen document; tab keeps playing; on Stop, download a `.webm` | Done |
 | 2 | `server/`: `POST/GET /api/meetings`; extension uploads on Stop (local backup kept) and shows Processing… → Ready; pipeline: Supabase Storage → Groq Whisper (chunked) → Groq extraction (title, summary, decisions, action items, stats, key moments, discuss-later, time saved) → Supabase tables → local embeddings in pgvector (`match_knowledge_chunks`, `POST /api/search`) → Google Doc via Composio; per-meeting status | Done |
-| 3+ | Company docs (SOP / project-plan PDFs) in the knowledge base, voice agent RAG + Composio actions (Gmail, Calendar, Slack, Sheets), Confirm/Follow-up flow, "brief me" for next meeting, time-saved counter in the web app, demo polish | Not started |
+| 3 | Voice agent on localhost: `server/` `POST /v1/chat/completions` (OpenAI-compatible SSE) as Agora's custom LLM via cloudflared; per-turn pgvector RAG + Groq tool calling; read tools (`search_knowledge`, `list_recent_meetings`, `get_meeting_details`, `get_open_items`, `brief_me`); actions via Composio (`send_email`, `post_to_slack` #hack, `create_calendar_event`, `add_tracker_row` "Tatva Tracker"), each read back and run only after a spoken yes (`pending_actions`); spoken error + retry; follow-up offers; `contacts` table (seeded); every tool call in `activity_log`; web app `invite-agent` uses `CUSTOM_LLM_URL` with Murf Falcon + Deepgram `en-IN` kept. Tested end to end over the tunnel with real Gmail / Calendar / Slack / Sheets actions (`pnpm run test:voice`); Agora accepts the agent config. Not yet tested with live speech | Done |
+| 4+ | Company docs (SOP / project-plan PDFs) in the knowledge base, time-saved counter and activity feed in the web app, one-click actions, demo polish, deployment | Not started |
 
 Update the status column as milestones land.
