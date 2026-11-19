@@ -90,7 +90,18 @@ never be hardcoded or committed.
 | - | --------- | ------ |
 | 1 | `extension/`: popup Start/Stop + timer; record tab audio + mic mixed via `chrome.tabCapture` + offscreen document; tab keeps playing; on Stop, download a `.webm` | Done |
 | 2 | `server/`: `POST/GET /api/meetings`; extension uploads on Stop (local backup kept) and shows Processing… → Ready; pipeline: Supabase Storage → Groq Whisper (chunked) → Groq extraction (title, summary, decisions, action items, stats, key moments, discuss-later, time saved) → Supabase tables → local embeddings in pgvector (`match_knowledge_chunks`, `POST /api/search`) → Google Doc via Composio; per-meeting status | Done |
-| 3 | Voice agent on localhost: `server/` `POST /v1/chat/completions` (OpenAI-compatible SSE) as Agora's custom LLM via cloudflared; per-turn pgvector RAG + Groq tool calling; read tools (`search_knowledge`, `list_recent_meetings`, `get_meeting_details`, `get_open_items`, `brief_me`); actions via Composio (`send_email`, `post_to_slack` #hack, `create_calendar_event`, `add_tracker_row` "Tatva Tracker"), each read back and run only after a spoken yes (`pending_actions`); spoken error + retry; follow-up offers; `contacts` table (seeded); every tool call in `activity_log`; web app `invite-agent` uses `CUSTOM_LLM_URL` with Murf Falcon + Deepgram `en-IN` kept. Tested end to end over the tunnel with real Gmail / Calendar / Slack / Sheets actions (`pnpm run test:voice`); Agora accepts the agent config. Not yet tested with live speech | Done |
+| 3 | Voice agent on localhost: `server/` `POST /v1/chat/completions` (OpenAI-compatible SSE) as Agora's custom LLM via cloudflared; per-turn pgvector RAG + Groq tool calling; read tools (`search_knowledge`, `list_recent_meetings`, `get_meeting_details`, `get_open_items`, `brief_me`); actions via Composio (`send_email`, `post_to_slack` #hack, `create_calendar_event`, `add_tracker_row` "Tatva Tracker"), each read back and run only after a spoken yes (`pending_actions`); spoken error + retry; follow-up offers; `contacts` table (seeded); every tool call in `activity_log`; web app `invite-agent` uses `CUSTOM_LLM_URL` with Murf Falcon + Deepgram `en-IN` kept. Tested end to end over the tunnel with real Gmail / Calendar / Slack / Sheets actions (`pnpm run test:voice`); Agora accepts the agent config. Voice-tested live for answers, email, calendar and Slack | Done |
 | 4+ | Company docs (SOP / project-plan PDFs) in the knowledge base, time-saved counter and activity feed in the web app, one-click actions, demo polish, deployment | Not started |
+
+### Polish backlog
+
+- **Voice latency is high** (noted after the live voice test; not fixed yet).
+  Measured at the custom LLM: about 1–2 s to first words for simple answers, about
+  3.5 s for "brief me", plus Agora STT/TTS on top. Likely causes: two Groq round
+  trips when a tool is needed, rounds are buffered rather than streamed, the
+  per-turn embedding + DB lookups, and Groq free-tier 8k TPM waits. Ideas:
+  stream the final round, speak a short filler while tools run, answer from the
+  injected RAG context without a tool round, cache meeting details, trim the
+  tool schemas.
 
 Update the status column as milestones land.
