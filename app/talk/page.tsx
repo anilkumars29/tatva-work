@@ -1,6 +1,11 @@
-import LandingPage from '@/components/LandingPage';
+import { Suspense } from 'react';
+import TalkToTatva from '@/components/tatva/talk/TalkToTatva';
 
-// Phase B replaces this with the Stitch "Talk to Tatva" screen.
 export default function TalkPage() {
-  return <LandingPage />;
+  // useSearchParams (?meeting=, ?brief=) needs a Suspense boundary.
+  return (
+    <Suspense>
+      <TalkToTatva />
+    </Suspense>
+  );
 }

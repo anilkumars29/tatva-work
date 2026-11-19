@@ -7,7 +7,7 @@ import { isToolkitConnected } from '../composio.js';
 import { buildMarkdown, createKnowledgeDoc } from '../pipeline/gdoc.js';
 import { localYmd, zoneOffset } from '../pipeline/dates.js';
 import { supabase } from '../supabase.js';
-import { ACTION_KINDS, executeNow, isActionKind, prepareAction, setTrackerStatus, trackerSheetUrl, UserFacingError } from '../voice/actions.js';
+import { ACTION_KINDS, executeNow, executePending, isActionKind, prepareAction, setTrackerStatus, trackerSheetUrl, UserFacingError, type PendingAction } from '../voice/actions.js';
 import { logActivity } from '../voice/activity.js';
 import { allContacts, recentMeetings } from '../voice/data.js';
 import { nextCalendarEvent } from '../voice/tools.js';
@@ -390,6 +390,108 @@ appRouter.get(
   '/tracker/sheet',
   handle(async (_req, res) => {
     res.json({ url: await remembered('sheet-url', 10 * 60_000, () => trackerSheetUrl()) });
+  }),
+);
+
+// ---------------------------------------------------------------- voice page
+
+/** "What Tatva is doing": this call's tool calls plus the action waiting for a yes. */
+appRouter.get(
+  '/voice/timeline',
+  handle(async (req, res) => {
+    const session = typeof req.query.session === 'string' ? req.query.session.slice(0, 120) : '';
+    let activity = supabase
+      .from('activity_log')
+      .select('id, created_at, session_id, tool, args, status, result, error, duration_ms')
+      .order('id', { ascending: false })
+      .limit(session ? 40 : 8);
+    if (session) activity = activity.eq('session_id', session);
+    let pending = supabase
+      .from('pending_actions')
+      .select('id, created_at, session_id, kind, args, summary, status, error')
+      .in('status', ['pending', 'failed'])
+      .gte('created_at', new Date(Date.now() - 10 * 60_000).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (session) pending = pending.eq('session_id', session);
+    const [a, p] = await Promise.all([activity, pending]);
+    if (a.error) throw new Error(a.error.message);
+    if (p.error) throw new Error(p.error.message);
+    res.json({ session: session || null, activity: (a.data ?? []).reverse(), pending: p.data?.[0] ?? null });
+  }),
+);
+
+/** Approve a pending action from the app (outside a call, or as a fallback). */
+appRouter.post(
+  '/voice/pending/:id/confirm',
+  handle(async (req, res) => {
+    const id = String(req.params.id);
+    if (!UUID.test(id)) {
+      res.status(400).json({ error: 'Invalid id.' });
+      return;
+    }
+    const { data, error } = await supabase
+      .from('pending_actions')
+      .select('id, session_id, kind, args, summary, status, created_at')
+      .eq('id', id)
+      .in('status', ['pending', 'failed'])
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) {
+      res.status(404).json({ error: 'That action is no longer waiting for approval.' });
+      return;
+    }
+    const outcome = await executePending(data.session_id, data as PendingAction);
+    res.status(outcome.ok ? 200 : 502).json(outcome);
+  }),
+);
+
+appRouter.post(
+  '/voice/pending/:id/cancel',
+  handle(async (req, res) => {
+    const id = String(req.params.id);
+    if (!UUID.test(id)) {
+      res.status(400).json({ error: 'Invalid id.' });
+      return;
+    }
+    const { data, error } = await supabase
+      .from('pending_actions')
+      .update({ status: 'cancelled' })
+      .eq('id', id)
+      .in('status', ['pending', 'failed'])
+      .select('session_id, kind, args')
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) {
+      res.status(404).json({ error: 'That action is no longer waiting for approval.' });
+      return;
+    }
+    void logActivity({ sessionId: data.session_id, tool: data.kind, args: data.args, status: 'cancelled' });
+    res.json({ ok: true, say: 'Cancelled.' });
+  }),
+);
+
+/** Counts for "Meeting Artifacts Loaded". */
+appRouter.get(
+  '/voice/stats',
+  handle(async (_req, res) => {
+    const count = async (table: string, filter?: (q: ReturnType<typeof supabase.from>) => unknown) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let q: any = supabase.from(table).select('*', { count: 'exact', head: true });
+      if (filter) q = filter(q);
+      const { count: n, error } = await q;
+      if (error) throw new Error(`${table}: ${error.message}`);
+      return n ?? 0;
+    };
+    const [recordings, segments, documents, chunks] = await Promise.all([
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      count('meetings', (q: any) => q.eq('status', 'ready')),
+      count('transcript_segments'),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      count('documents', (q: any) => q.eq('status', 'ready')),
+      count('knowledge_chunks'),
+    ]);
+    res.json({ recordings, transcript_lines: segments, documents, chunks });
   }),
 );
 
