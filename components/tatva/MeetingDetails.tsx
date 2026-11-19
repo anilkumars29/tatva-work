@@ -701,7 +701,7 @@ export default function MeetingDetails({ id }: { id: string }) {
                   <span className="font-caption text-caption font-semibold uppercase tracking-widest text-on-surface-variant">Time saved by Tatva</span>
                   <span className="font-headline-xl text-headline-xl font-extrabold tracking-tight text-primary-container">~{minutesLabel(m.time_saved_minutes ?? 0)}</span>
                   <p className="font-caption text-caption text-secondary-fixed-dim">
-                    {m.time_saved_breakdown.length ? m.time_saved_breakdown.map((b) => `${b.task} (${b.minutes} min)`).join(', ') : 'Estimate from the meeting extraction'}
+                    {m.time_saved_breakdown.length ? m.time_saved_breakdown.map((b) => `${b.task} (${b.minutes} min)`).join(', ') : 'Notes and captured items'}
                   </p>
                 </div>
                 <div className="z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-surface-container text-primary-container">

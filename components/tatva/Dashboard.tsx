@@ -235,7 +235,9 @@ export default function Dashboard() {
               <span className="font-headline-xl text-headline-xl font-extrabold tracking-tight text-primary-container">{s ? minutesLabel(s.time_saved_this_week_minutes) : '–'}</span>
             </div>
             <p className="relative z-10 font-caption text-caption text-secondary">
-              {s ? `From ${plural(s.meetings_this_week, 'meeting')} this week · ${minutesLabel(s.time_saved_total_minutes)} in total` : ''}
+              {s
+                ? `Notes, items and follow-ups for ${plural(s.meetings_this_week, 'meeting')}${s.time_saved_other_actions_minutes ? ` + ${s.time_saved_other_actions_minutes} min of other actions` : ''}`
+                : ''}
             </p>
           </div>
         </section>

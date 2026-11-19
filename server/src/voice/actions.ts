@@ -5,6 +5,7 @@ import { config } from '../config.js';
 import { executeTool, findDeep } from '../composio.js';
 import { zoneOffset } from '../pipeline/dates.js';
 import { supabase } from '../supabase.js';
+import { recomputeTimeSaved } from '../pipeline/timesaved-db.js';
 import { logActivity } from './activity.js';
 import { dateTimeLabel, dayLabel, meetingDetails, resolveContact, resolveMeeting, type MeetingDetails } from './data.js';
 
@@ -144,6 +145,17 @@ function toLocalNaive(iso: string): string {
 
 // ------------------------------------------------------------------- proposing
 
+async function meetingOfTopic(discussLaterId: string | undefined): Promise<string | null> {
+  if (!discussLaterId) return null;
+  const { data } = await supabase.from('discuss_later').select('meeting_id').eq('id', discussLaterId).maybeSingle();
+  return data?.meeting_id ?? null;
+}
+
+/** Linked actions count toward their meeting's time saved. */
+function afterAction(args: Record<string, unknown>) {
+  if (typeof args.meeting_id === 'string') void recomputeTimeSaved(args.meeting_id).catch(() => {});
+}
+
 /**
  * Validates and resolves a proposed action (contacts, meeting content, dates),
  * stores it as pending, and returns the sentence to read back.
@@ -235,6 +247,7 @@ export async function prepareAction(kind: ActionKind, input: Record<string, unkn
           attendees,
           description: str(input.description) ?? null,
           discuss_later_id: str(input.discuss_later_id) ?? null,
+          meeting_id: await meetingOfTopic(str(input.discuss_later_id)),
         },
         summary: `I'll create "${title}" on ${dateTimeLabel(start)} for ${minutes} minutes${who}. Shall I go ahead?`,
       };
@@ -303,7 +316,8 @@ export async function executePending(sessionId: string, pending: PendingAction):
   try {
     const result = await runAction(pending.kind, pending.args);
     await setStatus(pending.id, 'done', { result: result.data ?? null, error: null });
-    void logActivity({ sessionId, tool: pending.kind, args: pending.args, status: 'confirmed', result: result.data, durationMs: Date.now() - started });
+    await logActivity({ sessionId, tool: pending.kind, args: pending.args, status: 'confirmed', result: result.data, durationMs: Date.now() - started });
+    afterAction(pending.args);
     return { ok: true, say: result.say, fact: result.fact };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -512,7 +526,8 @@ export async function executeNow(kind: ActionKind, input: Record<string, unknown
   const started = Date.now();
   try {
     const result = await runAction(kind, args);
-    void logActivity({ sessionId: 'web', tool: kind, args, status: 'confirmed', result: result.data, durationMs: Date.now() - started });
+    await logActivity({ sessionId: 'web', tool: kind, args, status: 'confirmed', result: result.data, durationMs: Date.now() - started });
+    afterAction(args);
     return { ok: true, say: result.say, fact: result.fact, summary, data: result.data };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

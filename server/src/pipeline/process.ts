@@ -5,6 +5,7 @@ import { buildChunks } from './chunk.js';
 import { embed } from './embed.js';
 import { extractKnowledge, type Knowledge } from './extract.js';
 import { buildMarkdown, createKnowledgeDoc } from './gdoc.js';
+import { recomputeTimeSaved } from './timesaved-db.js';
 import { transcribe, type Segment } from './transcribe.js';
 
 export interface MeetingJob {
@@ -118,8 +119,6 @@ async function saveKnowledge(meetingId: string, knowledge: Knowledge, segments: 
     decisions: knowledge.decisions,
     stats_mentioned: knowledge.stats_mentioned,
     key_moments: knowledge.key_moments,
-    time_saved_minutes: knowledge.time_saved.minutes,
-    time_saved_breakdown: knowledge.time_saved.breakdown,
   });
 }
 
@@ -175,6 +174,8 @@ export async function processMeeting(job: MeetingJob): Promise<void> {
       sourceTitle: meeting.source_title,
     });
     await saveKnowledge(meetingId, knowledge, transcript.segments);
+    // Time saved = notes for this length + each captured item (+ actions run later).
+    const timeSaved = (await recomputeTimeSaved(meetingId)) ?? { minutes: 0, breakdown: [] };
 
     // 4. Index for RAG + knowledge doc.
     await setStatus(meetingId, 'indexing');
@@ -185,7 +186,7 @@ export async function processMeeting(job: MeetingJob): Promise<void> {
       try {
         const doc = await createKnowledgeDoc(
           `Tatva: ${knowledge.title} (${dateLabel(recordedAt)})`,
-          buildMarkdown(knowledge, transcript.segments, { dateLabel: dateTimeLabel(recordedAt), durationMinutes: durationSeconds / 60 }),
+          buildMarkdown(knowledge, transcript.segments, { dateLabel: dateTimeLabel(recordedAt), durationMinutes: durationSeconds / 60, timeSaved }),
         );
         await updateMeeting(meetingId, { gdoc_id: doc.id, gdoc_url: doc.url });
       } catch (err) {

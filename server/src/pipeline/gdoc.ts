@@ -11,7 +11,7 @@ function bullets(items: string[], empty: string): string {
 export function buildMarkdown(
   knowledge: Knowledge,
   segments: Segment[],
-  info: { dateLabel: string; durationMinutes: number },
+  info: { dateLabel: string; durationMinutes: number; timeSaved: { minutes: number; breakdown: { task: string; minutes: number }[] } },
 ): string {
   let transcript = segments.map((s) => `**[${formatTimestamp(s.start)}]** ${s.text}`).join('\n\n');
   if (transcript.length > MAX_TRANSCRIPT_CHARS) {
@@ -22,7 +22,7 @@ export function buildMarkdown(
 
 **Date:** ${info.dateLabel}
 **Length:** ${Math.max(1, Math.round(info.durationMinutes))} min
-**Time saved by Tatva Work:** ~${knowledge.time_saved.minutes} min
+**Time saved by Tatva Work:** ~${info.timeSaved.minutes} min
 
 ## Summary
 
@@ -73,7 +73,7 @@ ${bullets(
 ## Time saved breakdown
 
 ${bullets(
-  knowledge.time_saved.breakdown.map((b) => `${b.task}: ${b.minutes} min`),
+  info.timeSaved.breakdown.map((b) => `${b.task}: ${b.minutes} min`),
   'No breakdown.',
 )}
 

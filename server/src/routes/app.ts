@@ -6,6 +6,7 @@ import { config } from '../config.js';
 import { isToolkitConnected } from '../composio.js';
 import { buildMarkdown, createKnowledgeDoc } from '../pipeline/gdoc.js';
 import { localYmd, zoneOffset } from '../pipeline/dates.js';
+import { actionMinutes } from '../pipeline/timesaved.js';
 import { supabase } from '../supabase.js';
 import { ACTION_KINDS, executeNow, executePending, isActionKind, prepareAction, setTrackerStatus, trackerSheetUrl, UserFacingError, type PendingAction } from '../voice/actions.js';
 import { logActivity } from '../voice/activity.js';
@@ -64,7 +65,7 @@ appRouter.get(
         .eq('status', 'open')
         .order('due_date', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: false }),
-      supabase.from('activity_log').select('tool, created_at').eq('status', 'confirmed').gte('created_at', since),
+      supabase.from('activity_log').select('tool, args, created_at').eq('status', 'confirmed').gte('created_at', since),
       allContacts(),
     ]);
     for (const r of [meetings, open, actions]) if (r.error) throw new Error(r.error.message);
@@ -73,6 +74,10 @@ appRouter.get(
     const rows: any[] = meetings.data ?? [];
     const ready = rows.filter((m) => m.status === 'ready');
     const thisWeek = ready.filter((m) => (m.recorded_at ?? m.created_at) >= since);
+    // Actions not tied to a meeting (pings, standalone issues) still save time.
+    const unlinkedMinutes = (actions.data ?? [])
+      .filter((a) => !(a.args as Record<string, unknown> | null)?.meeting_id)
+      .reduce((sum, a) => sum + actionMinutes(a.tool, a.args as Record<string, unknown>), 0);
     const byTool: Record<string, number> = {};
     for (const a of actions.data ?? []) byTool[a.tool] = (byTool[a.tool] ?? 0) + 1;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -93,7 +98,8 @@ appRouter.get(
         overdue: openRows.filter((a) => a.due_date && a.due_date < today).length,
         actions_by_tatva_this_week: (actions.data ?? []).length,
         actions_by_tool: byTool,
-        time_saved_this_week_minutes: thisWeek.reduce((sum, m) => sum + (m.time_saved_minutes ?? 0), 0),
+        time_saved_this_week_minutes: thisWeek.reduce((sum, m) => sum + (m.time_saved_minutes ?? 0), 0) + unlinkedMinutes,
+        time_saved_other_actions_minutes: unlinkedMinutes,
         time_saved_total_minutes: ready.reduce((sum, m) => sum + (m.time_saved_minutes ?? 0), 0),
         week_start: since,
       },
@@ -208,13 +214,13 @@ appRouter.post(
           suggested_time: d.suggested_time_text,
           suggested_at: d.suggested_at,
         })),
-        time_saved: { minutes: m.time_saved_minutes ?? 0, breakdown: m.time_saved_breakdown ?? [] },
       } as unknown as Parameters<typeof buildMarkdown>[0],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (m.transcript_segments ?? []).sort(byPos).map((s: any) => ({ start: Number(s.start_sec), end: Number(s.end_sec), text: s.text })),
       {
         dateLabel: new Intl.DateTimeFormat('en-IN', { timeZone: config.timeZone, dateStyle: 'medium' }).format(recorded),
         durationMinutes: Number(m.duration_seconds ?? 0) / 60,
+        timeSaved: { minutes: m.time_saved_minutes ?? 0, breakdown: m.time_saved_breakdown ?? [] },
       },
     );
     const started = Date.now();

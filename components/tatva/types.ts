@@ -38,6 +38,7 @@ export interface DashboardData {
     actions_by_tatva_this_week: number;
     actions_by_tool: Record<string, number>;
     time_saved_this_week_minutes: number;
+    time_saved_other_actions_minutes: number;
     time_saved_total_minutes: number;
     week_start: string;
   };
