@@ -40,9 +40,9 @@ export function dateTimeLabel(iso: string): string {
 }
 
 // Small caches: these are read on every voice turn.
-function cached<T>(ttlMs: number, load: () => Promise<T>): () => Promise<T> {
+function cached<T>(ttlMs: number, load: () => Promise<T>): (() => Promise<T>) & { reset: () => void } {
   let value: { at: number; data: Promise<T> } | null = null;
-  return () => {
+  const get = () => {
     if (!value || Date.now() - value.at > ttlMs) {
       const data = load();
       data.catch(() => (value = null));
@@ -50,6 +50,7 @@ function cached<T>(ttlMs: number, load: () => Promise<T>): () => Promise<T> {
     }
     return value.data;
   };
+  return Object.assign(get, { reset: () => (value = null) });
 }
 
 export const recentMeetings = cached(30_000, async (): Promise<MeetingRow[]> => {
@@ -63,7 +64,7 @@ export const recentMeetings = cached(30_000, async (): Promise<MeetingRow[]> => 
   return data;
 });
 
-export const allContacts = cached(60_000, async (): Promise<Contact[]> => {
+export const allContacts = cached(15_000, async (): Promise<Contact[]> => {
   const { data, error } = await supabase.from('contacts').select('name, email, slack_handle, aliases').order('name');
   if (error) {
     console.warn(`[voice] contacts unavailable: ${error.message}`);

@@ -1,6 +1,5 @@
-import LandingPage from '@/components/LandingPage'
+import Dashboard from '@/components/tatva/Dashboard';
 
 export default function Home() {
-  return <LandingPage />
+  return <Dashboard />;
 }
-

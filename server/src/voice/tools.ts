@@ -139,6 +139,24 @@ export const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'log_issue',
+      description: `Proposes logging an issue (bug, blocker, escalation) in the tracker and escalating it to the owner on Slack ${config.slackChannel}.`,
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Short issue title.' },
+          owner: { type: 'string', description: 'Contact who should own it.' },
+          context: { type: 'string', description: 'One line of detail.' },
+          due: { type: 'string' },
+          meeting: meetingParam,
+        },
+        required: ['title'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'cancel_pending_action',
       description: 'Cancels the action waiting for confirmation, when the user says no or changes their mind.',
       parameters: { type: 'object', properties: {} },
@@ -230,7 +248,7 @@ async function briefMe(topic: string | undefined) {
   };
 }
 
-async function nextCalendarEvent() {
+export async function nextCalendarEvent() {
   const data = await executeTool('googlecalendar', 'GOOGLECALENDAR_EVENTS_LIST', {
     calendarId: 'primary',
     timeMin: new Date().toISOString(),
@@ -246,6 +264,10 @@ async function nextCalendarEvent() {
   return {
     title: String(event.summary ?? 'Untitled event'),
     when: dateTimeLabel(event.start.dateTime),
+    start: String(event.start.dateTime),
     attendees: (event.attendees ?? []).map((a: { displayName?: string; email: string }) => a.displayName ?? a.email).slice(0, 6),
+    created_by_tatva: /tatva/i.test(String(event.description ?? '')),
+    link: typeof event.htmlLink === 'string' ? event.htmlLink : null,
+    meet_link: typeof event.hangoutLink === 'string' ? event.hangoutLink : null,
   };
 }

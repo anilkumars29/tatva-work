@@ -8,7 +8,7 @@ import { supabase } from '../supabase.js';
 import { logActivity } from './activity.js';
 import { dateTimeLabel, dayLabel, meetingDetails, resolveContact, resolveMeeting, type MeetingDetails } from './data.js';
 
-export const ACTION_KINDS = ['send_email', 'post_to_slack', 'create_calendar_event', 'add_tracker_row'] as const;
+export const ACTION_KINDS = ['send_email', 'post_to_slack', 'create_calendar_event', 'add_tracker_row', 'log_issue'] as const;
 export type ActionKind = (typeof ACTION_KINDS)[number];
 
 export const isActionKind = (name: string): name is ActionKind => (ACTION_KINDS as readonly string[]).includes(name);
@@ -150,7 +150,7 @@ function toLocalNaive(iso: string): string {
  * Throws UserFacingError for things the user should clarify.
  */
 export async function proposeAction(sessionId: string, kind: ActionKind, input: Record<string, unknown>): Promise<PendingAction> {
-  const { args, summary } = await prepare(kind, input);
+  const { args, summary } = await prepareAction(kind, input);
   // One pending action per session: a new proposal replaces the old one.
   await supabase.from('pending_actions').update({ status: 'cancelled' }).eq('session_id', sessionId).in('status', ['pending', 'failed']);
   const { data, error } = await supabase
@@ -163,7 +163,7 @@ export async function proposeAction(sessionId: string, kind: ActionKind, input: 
   return data as PendingAction;
 }
 
-async function prepare(kind: ActionKind, input: Record<string, unknown>): Promise<{ args: Record<string, unknown>; summary: string }> {
+export async function prepareAction(kind: ActionKind, input: Record<string, unknown>): Promise<{ args: Record<string, unknown>; summary: string }> {
   switch (kind) {
     case 'send_email': {
       const toRaw = str(input.to);
@@ -175,7 +175,7 @@ async function prepare(kind: ActionKind, input: Record<string, unknown>): Promis
       const note = str(input.body);
       if (!meeting && !note) throw new UserFacingError('What should the email say?');
       const subject =
-        str(input.subject) ?? (meeting ? `${joinWords(sections.map((s) => sectionWords[s]))}: ${meeting.title}` : 'Note from Tatva Work');
+        str(input.subject) ?? (meeting ? `${joinWords(sections.map((s) => sectionWords[s])).replace(/^./, (c) => c.toUpperCase())}: ${meeting.title}` : 'Note from Tatva Work');
       const greeting = `Hi ${to.contact ? to.name.split(' ')[0] : 'there'},`;
       const body = [greeting, note, meeting ? `From "${meeting.title}" (${meeting.date}):\n\n${renderMeeting(meeting, sections, '-')}` : null]
         .filter(Boolean)
@@ -224,10 +224,18 @@ async function prepare(kind: ActionKind, input: Record<string, unknown>): Promis
         if (found) attendees.push({ name: found.name, email: found.email });
         else unknown.push(person);
       }
-      if (unknown.length) throw new UserFacingError(`I don't have an email for ${joinWords(unknown)}. Should I leave them out, or what's their email?`);
+      if (unknown.length && !input.skip_unknown_attendees)
+        throw new UserFacingError(`I don't have an email for ${joinWords(unknown)}. Should I leave them out, or what's their email?`);
       const who = attendees.length ? `, inviting ${joinWords(attendees.map((a) => a.name.split(' ')[0]))}` : '';
       return {
-        args: { title, start, duration_minutes: minutes, attendees, description: str(input.description) ?? null },
+        args: {
+          title,
+          start,
+          duration_minutes: minutes,
+          attendees,
+          description: str(input.description) ?? null,
+          discuss_later_id: str(input.discuss_later_id) ?? null,
+        },
         summary: `I'll create "${title}" on ${dateTimeLabel(start)} for ${minutes} minutes${who}. Shall I go ahead?`,
       };
     }
@@ -246,8 +254,33 @@ async function prepare(kind: ActionKind, input: Record<string, unknown>): Promis
           ? `"${rows[0].task}"${rows[0].owner ? ` for ${rows[0].owner}` : ''}${rows[0].due ? `, due ${rows[0].due}` : ''}`
           : `${rows.length} action items from ${meeting?.title}`;
       return {
-        args: { rows, status, meeting: meeting?.title ?? str(input.meeting) ?? '' },
+        args: { rows, status, meeting: meeting?.title ?? str(input.meeting) ?? '', meeting_id: meeting?.id ?? null, custom: !!task },
         summary: `I'll add ${what} to the ${config.trackerSheetName} sheet. Should I add ${rows.length === 1 ? 'it' : 'them'}?`,
+      };
+    }
+
+    case 'log_issue': {
+      const title = str(input.title);
+      if (!title) throw new UserFacingError('What is the issue?');
+      const ownerRaw = str(input.owner);
+      const owner = ownerRaw ? await resolveContact(ownerRaw) : null;
+      if (ownerRaw && !owner) throw new UserFacingError(`I don't have ${ownerRaw} in contacts. Who should own this issue?`);
+      const meeting = str(input.meeting) ? await loadMeeting(input.meeting) : null;
+      const ownerName = owner?.name ?? null;
+      const handle = owner?.contact?.slack_handle ?? null;
+      const who = ownerName ? ` for ${ownerName.split(' ')[0]}` : '';
+      const escalate = ownerName ? `, and escalate it to ${ownerName.split(' ')[0]} in ${config.slackChannel.replace('#', 'the ')} channel` : `, and post it in ${config.slackChannel.replace('#', 'the ')} channel`;
+      return {
+        args: {
+          title,
+          owner: ownerName,
+          slack_handle: handle,
+          context: str(input.context) ?? null,
+          due: str(input.due) ?? null,
+          meeting_id: meeting?.id ?? null,
+          meeting: meeting?.title ?? null,
+        },
+        summary: `I'll log the issue "${title}"${who} in the tracker${escalate}. Shall I go ahead?`,
       };
     }
   }
@@ -267,7 +300,7 @@ export interface ActionOutcome {
 export async function executePending(sessionId: string, pending: PendingAction): Promise<ActionOutcome> {
   const started = Date.now();
   try {
-    const result = await run(pending.kind, pending.args);
+    const result = await runAction(pending.kind, pending.args);
     await setStatus(pending.id, 'done', { result: result.data ?? null, error: null });
     void logActivity({ sessionId, tool: pending.kind, args: pending.args, status: 'confirmed', result: result.data, durationMs: Date.now() - started });
     return { ok: true, say: result.say, fact: result.fact };
@@ -286,8 +319,9 @@ function failureSentence(kind: ActionKind, message: string): string {
     post_to_slack: 'posting to Slack',
     create_calendar_event: 'creating the calendar event',
     add_tracker_row: 'updating the tracker',
+    log_issue: 'logging the issue',
   }[kind];
-  const app = { send_email: 'Gmail', post_to_slack: 'Slack', create_calendar_event: 'Google Calendar', add_tracker_row: 'Google Sheets' }[kind];
+  const app = { send_email: 'Gmail', post_to_slack: 'Slack', create_calendar_event: 'Google Calendar', add_tracker_row: 'Google Sheets', log_issue: 'Google Sheets or Slack' }[kind];
   let reason = 'the service returned an error';
   if (/not.?connected|no connected account|auth|unauthori[sz]ed|401|403|expired|invalid_grant/i.test(message)) reason = `the ${app} connection needs to be re-authorised in Composio`;
   else if (/channel_not_found|not_in_channel/i.test(message)) reason = `the Tatva app isn't in that Slack channel`;
@@ -296,7 +330,7 @@ function failureSentence(kind: ActionKind, message: string): string {
   return `Sorry, ${what} failed because ${reason}. Should I try again, or would you like to change something?`;
 }
 
-async function run(kind: ActionKind, a: Record<string, unknown>): Promise<{ say: string; fact: string; data?: unknown }> {
+export async function runAction(kind: ActionKind, a: Record<string, unknown>): Promise<{ say: string; fact: string; data?: unknown }> {
   switch (kind) {
     case 'send_email': {
       const data = await executeTool('gmail', 'GMAIL_SEND_EMAIL', {
@@ -332,10 +366,11 @@ async function run(kind: ActionKind, a: Record<string, unknown>): Promise<{ say:
         event_duration_hour: Math.floor(Number(a.duration_minutes) / 60),
         event_duration_minutes: Number(a.duration_minutes) % 60,
         attendees: attendees.map((p) => p.email),
-        description: a.description ?? 'Scheduled by Tatva Work',
+        description: [a.description, 'Scheduled by Tatva Work'].filter(Boolean).join('\n\n'),
         send_updates: attendees.length ? 'all' : 'none',
       });
-      await markScheduled(String(a.title));
+      if (a.discuss_later_id) await supabase.from('discuss_later').update({ status: 'scheduled' }).eq('id', a.discuss_later_id);
+      else await markScheduled(String(a.title));
       const invited = attendees.length ? `, and I've sent the invite${attendees.length > 1 ? 's' : ''}` : '';
       return {
         say: `Done, ${a.title} is on the calendar for ${dateTimeLabel(String(a.start))}${invited}. Should I post it in Slack too?`,
@@ -350,15 +385,59 @@ async function run(kind: ActionKind, a: Record<string, unknown>): Promise<{ say:
       const added = new Date().toISOString().slice(0, 10);
       await executeTool('googlesheets', 'GOOGLESHEETS_SPREADSHEETS_VALUES_APPEND', {
         spreadsheetId,
-        range: `'${tab}'!A:F`,
+        range: `'${tab}'!A:G`,
         valueInputOption: 'USER_ENTERED',
         insertDataOption: 'INSERT_ROWS',
-        values: rows.map((r) => [r.task, r.owner, r.due, a.status, a.meeting, added]),
+        values: rows.map((r) => [r.task, r.owner, r.due, a.status, a.meeting, added, 'Task']),
       });
+      // A one-off task (not from a meeting's action items) also goes into the app's tracker.
+      if (a.custom) {
+        await supabase.from('action_items').insert(
+          rows.map((r) => ({ task: r.task, owner: r.owner || null, due_text: r.due || null, kind: 'task', source: 'voice', meeting_id: a.meeting_id ?? null })),
+        );
+      }
       return {
         say: rows.length === 1 ? 'Added it to the tracker.' : `Added ${rows.length} rows to the tracker.`,
         fact: `Added ${rows.length} row(s) to ${config.trackerSheetName}`,
         data: { spreadsheetId, rows: rows.length },
+      };
+    }
+
+    case 'log_issue': {
+      const { data: item, error } = await supabase
+        .from('action_items')
+        .insert({
+          task: a.title,
+          owner: a.owner ?? null,
+          context: a.context ?? null,
+          due_text: a.due ?? null,
+          kind: 'issue',
+          source: 'voice',
+          meeting_id: a.meeting_id ?? null,
+        })
+        .select('id')
+        .single();
+      if (error) throw new Error(`Could not save the issue: ${error.message}`);
+      const { spreadsheetId, tab } = await trackerSheet();
+      await executeTool('googlesheets', 'GOOGLESHEETS_SPREADSHEETS_VALUES_APPEND', {
+        spreadsheetId,
+        range: `'${tab}'!A:G`,
+        valueInputOption: 'USER_ENTERED',
+        insertDataOption: 'INSERT_ROWS',
+        values: [[a.title, a.owner ?? '', a.due ?? '', 'Open', a.meeting ?? '', new Date().toISOString().slice(0, 10), 'Issue']],
+      });
+      const mention = a.slack_handle ? `@${a.slack_handle}` : a.owner ? String(a.owner) : 'team';
+      await executeTool('slack', 'SLACK_SEND_MESSAGE', {
+        channel: config.slackChannel,
+        markdown_text: [`:rotating_light: *Issue escalated to ${mention}*`, `*${a.title}*`, a.context, a.due ? `Due: ${a.due}` : null, '_Logged by Tatva Work_']
+          .filter(Boolean)
+          .join('\n'),
+      });
+      const first = a.owner ? String(a.owner).split(' ')[0] : null;
+      return {
+        say: `Logged. ${first ? `I've escalated it to ${first} on Slack.` : "I've posted it on Slack."}`,
+        fact: `Logged issue "${a.title}"${a.owner ? ` for ${a.owner}` : ''}`,
+        data: { id: item.id },
       };
     }
   }
@@ -378,7 +457,7 @@ async function markScheduled(title: string) {
   if (ids.length) await supabase.from('discuss_later').update({ status: 'scheduled' }).in('id', ids);
 }
 
-const TRACKER_HEADER = ['Task', 'Owner', 'Due', 'Status', 'Meeting', 'Added'];
+const TRACKER_HEADER = ['Task', 'Owner', 'Due', 'Status', 'Meeting', 'Added', 'Type'];
 let tracker: Promise<{ spreadsheetId: string; tab: string }> | null = null;
 
 /**
@@ -405,12 +484,12 @@ function trackerSheet(): Promise<{ spreadsheetId: string; tab: string }> {
     const tab: string = names?.sheet_names?.[0] ?? names?.sheets?.[0] ?? 'Sheet1';
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const head: any = await executeTool('googlesheets', 'GOOGLESHEETS_BATCH_GET', { spreadsheet_id: spreadsheetId, ranges: [`'${tab}'!A1:F1`] });
+    const head: any = await executeTool('googlesheets', 'GOOGLESHEETS_BATCH_GET', { spreadsheet_id: spreadsheetId, ranges: [`'${tab}'!A1:G1`] });
     const current: string[] = head?.valueRanges?.[0]?.values?.[0] ?? [];
     if (current.length < TRACKER_HEADER.length) {
       await executeTool('googlesheets', 'GOOGLESHEETS_VALUES_UPDATE', {
         spreadsheet_id: spreadsheetId,
-        range: `'${tab}'!A1:F1`,
+        range: `'${tab}'!A1:G1`,
         value_input_option: 'RAW',
         values: [TRACKER_HEADER],
       });
@@ -420,3 +499,69 @@ function trackerSheet(): Promise<{ spreadsheetId: string; tab: string }> {
   tracker.catch(() => (tracker = null));
   return tracker;
 }
+
+// ------------------------------------------------------------- web app helpers
+
+/**
+ * Runs an action the user confirmed in the web app's dialog (the dialog showed
+ * prepareAction's summary). Logged like a voice-confirmed action, session "web".
+ */
+export async function executeNow(kind: ActionKind, input: Record<string, unknown>): Promise<ActionOutcome & { summary: string; data?: unknown }> {
+  const { args, summary } = await prepareAction(kind, input);
+  const started = Date.now();
+  try {
+    const result = await runAction(kind, args);
+    void logActivity({ sessionId: 'web', tool: kind, args, status: 'confirmed', result: result.data, durationMs: Date.now() - started });
+    return { ok: true, say: result.say, fact: result.fact, summary, data: result.data };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    void logActivity({ sessionId: 'web', tool: kind, args, status: 'error', error: message, durationMs: Date.now() - started });
+    return { ok: false, say: failureSentence(kind, message), fact: message, summary };
+  }
+}
+
+/** Sets the Status cell of a task's row in the tracker sheet (appends the row if it is missing). */
+// Task column of the tracker sheet, cached so status changes don't each cost a
+// Sheets read (Google's per-minute read quota is shared through Composio).
+let taskColumn: { at: number; values: string[] } | null = null;
+
+async function trackerTasks(spreadsheetId: string, tab: string): Promise<string[]> {
+  if (taskColumn && Date.now() - taskColumn.at < 5 * 60_000) return taskColumn.values;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data: any = await executeTool('googlesheets', 'GOOGLESHEETS_BATCH_GET', { spreadsheet_id: spreadsheetId, ranges: [`'${tab}'!A:A`] });
+  const values = ((data?.valueRanges?.[0]?.values ?? []) as string[][]).map((row) => row?.[0] ?? '');
+  taskColumn = { at: Date.now(), values };
+  return values;
+}
+
+export async function setTrackerStatus(item: { task: string; owner: string | null; due: string | null; meeting: string | null; kind: string }, status: string) {
+  const { spreadsheetId, tab } = await trackerSheet();
+  const column = await trackerTasks(spreadsheetId, tab);
+  const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const index = column.findIndex((task, i) => i > 0 && norm(task) === norm(item.task));
+  if (index > 0) {
+    await executeTool('googlesheets', 'GOOGLESHEETS_VALUES_UPDATE', {
+      spreadsheet_id: spreadsheetId,
+      range: `'${tab}'!D${index + 1}`,
+      value_input_option: 'RAW',
+      values: [[status]],
+    });
+    return { row: index + 1, appended: false };
+  }
+  await executeTool('googlesheets', 'GOOGLESHEETS_SPREADSHEETS_VALUES_APPEND', {
+    spreadsheetId,
+    range: `'${tab}'!A:G`,
+    valueInputOption: 'USER_ENTERED',
+    insertDataOption: 'INSERT_ROWS',
+    values: [[item.task, item.owner ?? '', item.due ?? '', status, item.meeting ?? '', new Date().toISOString().slice(0, 10), item.kind === 'issue' ? 'Issue' : 'Task']],
+  });
+  taskColumn = null; // row numbers changed; re-read next time
+  return { row: null, appended: true };
+}
+
+/** The tracker sheet's URL, for "Open in Google Sheets". */
+export async function trackerSheetUrl(): Promise<string> {
+  const { spreadsheetId } = await trackerSheet();
+  return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
+}
+

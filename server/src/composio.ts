@@ -24,15 +24,24 @@ export async function isToolkitConnected(toolkit: string): Promise<boolean> {
   return item?.connection?.isActive === true;
 }
 
-/** Runs a Composio tool and returns its `data`, throwing on failure. */
+const RETRY_DELAYS_MS = [3000, 8000];
+const isQuotaError = (message: string) => /quota exceeded|rate.?limit|too many requests|429|userRateLimitExceeded/i.test(message);
+
+/**
+ * Runs a Composio tool and returns its `data`, throwing on failure. Google
+ * per-minute quota and rate-limit errors are retried twice with a backoff.
+ */
 export async function executeTool(toolkit: string, slug: string, args: Record<string, unknown>): Promise<unknown> {
   const session = await getSession(toolkit);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result: any = await session.execute(slug, args);
-  if (result?.successful === false || result?.error) {
-    throw new Error(`${slug} failed: ${typeof result.error === 'string' ? result.error : JSON.stringify(result.error)}`);
+  for (let attempt = 0; ; attempt++) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result: any = await session.execute(slug, args);
+    if (result?.successful !== false && !result?.error) return result?.data ?? result;
+    const message = `${slug} failed: ${typeof result.error === 'string' ? result.error : JSON.stringify(result.error)}`;
+    if (attempt >= RETRY_DELAYS_MS.length || !isQuotaError(message)) throw new Error(message);
+    console.warn(`[composio] ${slug} hit a quota/rate limit, retrying in ${RETRY_DELAYS_MS[attempt] / 1000}s`);
+    await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
   }
-  return result?.data ?? result;
 }
 
 /** Finds the first value for any of `keys` anywhere in a nested object. */

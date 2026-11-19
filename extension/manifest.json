@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Tatva Work Recorder",
   "description": "Records a browser meeting (tab audio + your microphone) and sends it to Tatva Work.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "minimum_chrome_version": "116",
   "permissions": [
     "tabCapture",
@@ -20,5 +20,17 @@
   },
   "background": {
     "service_worker": "service-worker.js"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost:3000/*",
+        "http://127.0.0.1:3000/*"
+      ],
+      "js": [
+        "page-marker.js"
+      ],
+      "run_at": "document_start"
+    }
+  ]
 }

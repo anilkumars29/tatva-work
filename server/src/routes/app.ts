@@ -1,0 +1,399 @@
+// Endpoints for the Tatva web app (Next.js, proxied as /tatva/* -> /api/*).
+// Local only: requests through the Cloudflare tunnel never reach /api (see index.ts).
+import { Router, type Request, type Response } from 'express';
+import { z } from 'zod';
+import { config } from '../config.js';
+import { isToolkitConnected } from '../composio.js';
+import { buildMarkdown, createKnowledgeDoc } from '../pipeline/gdoc.js';
+import { localYmd, zoneOffset } from '../pipeline/dates.js';
+import { supabase } from '../supabase.js';
+import { ACTION_KINDS, executeNow, isActionKind, prepareAction, setTrackerStatus, trackerSheetUrl, UserFacingError } from '../voice/actions.js';
+import { logActivity } from '../voice/activity.js';
+import { allContacts, recentMeetings } from '../voice/data.js';
+import { nextCalendarEvent } from '../voice/tools.js';
+
+export const appRouter = Router();
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+/** Wraps a handler so thrown errors become JSON 500s (400 for UserFacingError). */
+const handle =
+  (fn: (req: Request, res: Response) => Promise<void>) =>
+  (req: Request, res: Response) =>
+    fn(req, res).catch((err) => {
+      if (!res.headersSent) res.status(err instanceof UserFacingError ? 400 : 500).json({ error: message(err) });
+    });
+
+/** Monday 00:00 in the display time zone, as an ISO instant. */
+function weekStart(now = new Date()): string {
+  const weekday = new Intl.DateTimeFormat('en-US', { timeZone: config.timeZone, weekday: 'short' }).format(now);
+  const back = (['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(weekday) + 7) % 7;
+  const monday = localYmd(new Date(now.getTime() - back * 86_400_000));
+  return new Date(`${monday}T00:00:00${zoneOffset(new Date(`${monday}T12:00:00Z`))}`).toISOString();
+}
+
+// Small TTL cache for slow Composio lookups.
+const memo = new Map<string, { at: number; value: Promise<unknown> }>();
+function remembered<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<T> {
+  const hit = memo.get(key);
+  if (hit && Date.now() - hit.at < ttlMs) return hit.value as Promise<T>;
+  const value = load();
+  value.catch(() => memo.delete(key));
+  memo.set(key, { at: Date.now(), value });
+  return value;
+}
+
+// ------------------------------------------------------------------ dashboard
+
+appRouter.get(
+  '/dashboard',
+  handle(async (_req, res) => {
+    const since = weekStart();
+    const today = localYmd(new Date());
+    const weekEnd = localYmd(new Date(Date.parse(since) + 7 * 86_400_000 - 1));
+    const [meetings, open, actions, contacts] = await Promise.all([
+      supabase
+        .from('meetings')
+        .select('id, title, source_title, status, error, recorded_at, created_at, duration_seconds, time_saved_minutes, action_items(count)')
+        .order('created_at', { ascending: false })
+        .limit(100),
+      supabase
+        .from('action_items')
+        .select('id, task, owner, due_text, due_date, kind, meeting_id, created_at, meetings(title)')
+        .eq('status', 'open')
+        .order('due_date', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false }),
+      supabase.from('activity_log').select('tool, created_at').eq('status', 'confirmed').gte('created_at', since),
+      allContacts(),
+    ]);
+    for (const r of [meetings, open, actions]) if (r.error) throw new Error(r.error.message);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = meetings.data ?? [];
+    const ready = rows.filter((m) => m.status === 'ready');
+    const thisWeek = ready.filter((m) => (m.recorded_at ?? m.created_at) >= since);
+    const byTool: Record<string, number> = {};
+    for (const a of actions.data ?? []) byTool[a.tool] = (byTool[a.tool] ?? 0) + 1;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const openRows: any[] = open.data ?? [];
+    const handleOf = (owner: string | null) => {
+      if (!owner) return null;
+      const first = owner.toLowerCase().split(' ')[0];
+      const c = contacts.find((x) => [x.name, ...x.aliases].some((n) => n.toLowerCase().split(' ')[0] === first));
+      return c ? { name: c.name, slack_handle: c.slack_handle } : null;
+    };
+
+    res.json({
+      stats: {
+        meetings_recorded: ready.length,
+        meetings_this_week: thisWeek.length,
+        open_action_items: openRows.length,
+        due_this_week: openRows.filter((a) => a.due_date && a.due_date >= today && a.due_date <= weekEnd).length,
+        overdue: openRows.filter((a) => a.due_date && a.due_date < today).length,
+        actions_by_tatva_this_week: (actions.data ?? []).length,
+        actions_by_tool: byTool,
+        time_saved_this_week_minutes: thisWeek.reduce((sum, m) => sum + (m.time_saved_minutes ?? 0), 0),
+        time_saved_total_minutes: ready.reduce((sum, m) => sum + (m.time_saved_minutes ?? 0), 0),
+        week_start: since,
+      },
+      meetings: rows.map((m) => ({
+        id: m.id,
+        title: m.title ?? m.source_title ?? 'Untitled meeting',
+        status: m.status,
+        error: m.error,
+        recorded_at: m.recorded_at ?? m.created_at,
+        duration_seconds: m.duration_seconds,
+        time_saved_minutes: m.time_saved_minutes,
+        action_count: m.action_items?.[0]?.count ?? 0,
+      })),
+      pending: openRows.slice(0, 50).map((a) => ({
+        id: a.id,
+        task: a.task,
+        owner: a.owner,
+        owner_contact: handleOf(a.owner),
+        due_text: a.due_text,
+        due_date: a.due_date,
+        kind: a.kind,
+        meeting_id: a.meeting_id,
+        meeting: a.meetings?.title ?? null,
+      })),
+    });
+  }),
+);
+
+appRouter.get(
+  '/calendar/next',
+  handle(async (_req, res) => {
+    const event = await remembered('next-event', 60_000, () => nextCalendarEvent());
+    res.json({ event });
+  }),
+);
+
+appRouter.get(
+  '/status',
+  handle(async (_req, res) => {
+    const toolkits = ['gmail', 'slack', 'googlecalendar', 'googlesheets', 'googledocs'];
+    const status = await remembered('status', 5 * 60_000, async () =>
+      Object.fromEntries(await Promise.all(toolkits.map(async (t) => [t, await isToolkitConnected(t).catch(() => false)]))),
+    );
+    res.json({ composio: status, user_id: config.composioUserId, slack_channel: config.slackChannel, tracker: config.trackerSheetName });
+  }),
+);
+
+// ------------------------------------------------------------------ meetings
+
+appRouter.get(
+  '/meetings/:id/audio',
+  handle(async (req, res) => {
+    if (!UUID.test(String(req.params.id))) {
+      res.status(400).json({ error: 'Invalid meeting id.' });
+      return;
+    }
+    const { data, error } = await supabase.from('meetings').select('audio_path, audio_mime').eq('id', req.params.id).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data?.audio_path) {
+      res.status(404).json({ error: 'No stored recording for this meeting.' });
+      return;
+    }
+    const signed = await supabase.storage.from(config.audioBucket).createSignedUrl(data.audio_path, 3600);
+    if (signed.error) throw new Error(signed.error.message);
+    res.json({ url: signed.data.signedUrl, mime: data.audio_mime, expires_in: 3600 });
+  }),
+);
+
+/** Creates the meeting's Google Doc when the pipeline couldn't (or it was never made). */
+appRouter.post(
+  '/meetings/:id/gdoc',
+  handle(async (req, res) => {
+    const id = String(req.params.id);
+    if (!UUID.test(id)) {
+      res.status(400).json({ error: 'Invalid meeting id.' });
+      return;
+    }
+    const { data: m, error } = await supabase
+      .from('meetings')
+      .select(
+        '*, action_items(position, task, owner, due_text, due_date), discuss_later(position, topic, people, suggested_time_text, suggested_at), transcript_segments(position, start_sec, end_sec, text)',
+      )
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!m) {
+      res.status(404).json({ error: 'Meeting not found.' });
+      return;
+    }
+    if (m.gdoc_url) {
+      res.json({ url: m.gdoc_url, created: false });
+      return;
+    }
+    const byPos = (a: { position: number }, b: { position: number }) => a.position - b.position;
+    const recorded = new Date(m.recorded_at ?? m.created_at);
+    const markdown = buildMarkdown(
+      {
+        title: m.title ?? 'Meeting',
+        summary: m.summary ?? '',
+        decisions: m.decisions ?? [],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        action_items: (m.action_items ?? []).sort(byPos).map((a: any) => ({ task: a.task, owner: a.owner, due: a.due_text, due_date: a.due_date })),
+        stats_mentioned: m.stats_mentioned ?? [],
+        key_moments: m.key_moments ?? [],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        discuss_later: (m.discuss_later ?? []).sort(byPos).map((d: any) => ({
+          topic: d.topic,
+          people: d.people ?? [],
+          suggested_time: d.suggested_time_text,
+          suggested_at: d.suggested_at,
+        })),
+        time_saved: { minutes: m.time_saved_minutes ?? 0, breakdown: m.time_saved_breakdown ?? [] },
+      } as unknown as Parameters<typeof buildMarkdown>[0],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (m.transcript_segments ?? []).sort(byPos).map((s: any) => ({ start: Number(s.start_sec), end: Number(s.end_sec), text: s.text })),
+      {
+        dateLabel: new Intl.DateTimeFormat('en-IN', { timeZone: config.timeZone, dateStyle: 'medium' }).format(recorded),
+        durationMinutes: Number(m.duration_seconds ?? 0) / 60,
+      },
+    );
+    const started = Date.now();
+    try {
+      const doc = await createKnowledgeDoc(`Tatva: ${m.title ?? 'Meeting'} (${localYmd(recorded)})`, markdown);
+      await supabase.from('meetings').update({ gdoc_id: doc.id, gdoc_url: doc.url }).eq('id', id);
+      void logActivity({ sessionId: 'web', tool: 'create_google_doc', args: { meeting_id: id }, status: 'confirmed', result: doc, durationMs: Date.now() - started });
+      res.json({ url: doc.url, created: true });
+    } catch (err) {
+      void logActivity({ sessionId: 'web', tool: 'create_google_doc', args: { meeting_id: id }, status: 'error', error: message(err) });
+      throw err;
+    }
+  }),
+);
+
+/** Logs that the user opened a meeting's Google Doc from the app. */
+appRouter.post(
+  '/meetings/:id/gdoc/opened',
+  handle(async (req, res) => {
+    void logActivity({ sessionId: 'web', tool: 'open_google_doc', args: { meeting_id: req.params.id }, status: 'ok' });
+    res.json({ ok: true });
+  }),
+);
+
+// ------------------------------------------------------------------- actions
+// The web app's confirm dialog shows `preview`'s summary; "Confirm" calls `execute`.
+
+const actionBody = z.object({ kind: z.enum(ACTION_KINDS), input: z.record(z.string(), z.unknown()).default({}) });
+
+appRouter.post(
+  '/actions/preview',
+  handle(async (req, res) => {
+    const body = actionBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: 'Body must be { kind, input }.' });
+      return;
+    }
+    const { summary, args } = await prepareAction(body.data.kind, body.data.input);
+    res.json({ summary, args });
+  }),
+);
+
+appRouter.post(
+  '/actions/execute',
+  handle(async (req, res) => {
+    const body = actionBody.safeParse(req.body);
+    if (!body.success || !isActionKind(body.data.kind)) {
+      res.status(400).json({ error: 'Body must be { kind, input }.' });
+      return;
+    }
+    const outcome = await executeNow(body.data.kind, body.data.input);
+    res.status(outcome.ok ? 200 : 502).json(outcome);
+  }),
+);
+
+// -------------------------------------------------------------- action items
+
+appRouter.patch(
+  '/action-items/:id',
+  handle(async (req, res) => {
+    const id = String(req.params.id);
+    const body = z.object({ status: z.enum(['open', 'done']) }).safeParse(req.body);
+    if (!UUID.test(id) || !body.success) {
+      res.status(400).json({ error: 'Body must be { status: "open" | "done" }.' });
+      return;
+    }
+    const { data: item, error } = await supabase
+      .from('action_items')
+      .update({ status: body.data.status })
+      .eq('id', id)
+      .select('id, task, owner, due_text, due_date, kind, status, meetings(title)')
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!item) {
+      res.status(404).json({ error: 'Action item not found.' });
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const meetingTitle = (item as any).meetings?.title ?? null;
+    let sheet: { ok: boolean; error?: string; row?: number | null; appended?: boolean };
+    try {
+      sheet = { ok: true, ...(await setTrackerStatus({ task: item.task, owner: item.owner, due: item.due_text ?? item.due_date, meeting: meetingTitle, kind: item.kind }, body.data.status === 'done' ? 'Done' : 'Open')) };
+    } catch (err) {
+      sheet = { ok: false, error: message(err) };
+    }
+    void logActivity({
+      sessionId: 'web',
+      tool: body.data.status === 'done' ? 'mark_complete' : 'reopen_item',
+      args: { id, task: item.task },
+      status: sheet.ok ? 'ok' : 'error',
+      result: sheet,
+      error: sheet.error,
+    });
+    res.json({ item, sheet });
+  }),
+);
+
+// ------------------------------------------------------------------- contacts
+
+const contactBody = z.object({
+  name: z.string().trim().min(1).max(120),
+  email: z.string().trim().email().max(200),
+  slack_handle: z
+    .string()
+    .trim()
+    .max(80)
+    .transform((s) => s.replace(/^@/, '') || null)
+    .nullable()
+    .optional(),
+  role: z.string().trim().max(120).nullable().optional(),
+  aliases: z.array(z.string().trim().min(1).max(60)).max(10).optional(),
+});
+
+appRouter.get(
+  '/contacts',
+  handle(async (_req, res) => {
+    const { data, error } = await supabase.from('contacts').select('id, name, email, slack_handle, role, aliases, created_at').order('created_at');
+    if (error) throw new Error(error.message);
+    res.json({ contacts: data });
+  }),
+);
+
+appRouter.post(
+  '/contacts',
+  handle(async (req, res) => {
+    const body = contactBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') });
+      return;
+    }
+    const first = body.data.name.split(' ')[0];
+    const { data, error } = await supabase
+      .from('contacts')
+      .insert({ ...body.data, aliases: body.data.aliases ?? (first !== body.data.name ? [first] : []) })
+      .select('id, name, email, slack_handle, role, aliases, created_at')
+      .single();
+    if (error) {
+      res.status(error.code === '23505' ? 409 : 500).json({ error: error.code === '23505' ? `A contact named "${body.data.name}" already exists.` : error.message });
+      return;
+    }
+    allContacts.reset();
+    res.status(201).json({ contact: data });
+  }),
+);
+
+appRouter.patch(
+  '/contacts/:id',
+  handle(async (req, res) => {
+    const body = contactBody.partial().safeParse(req.body);
+    if (!UUID.test(String(req.params.id)) || !body.success) {
+      res.status(400).json({ error: body.success ? 'Invalid contact id.' : body.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') });
+      return;
+    }
+    const { data, error } = await supabase
+      .from('contacts')
+      .update(body.data)
+      .eq('id', req.params.id)
+      .select('id, name, email, slack_handle, role, aliases, created_at')
+      .maybeSingle();
+    if (error) {
+      res.status(error.code === '23505' ? 409 : 500).json({ error: error.code === '23505' ? 'Another contact already has that name.' : error.message });
+      return;
+    }
+    if (!data) {
+      res.status(404).json({ error: 'Contact not found.' });
+      return;
+    }
+    allContacts.reset();
+    res.json({ contact: data });
+  }),
+);
+
+// -------------------------------------------------------------------- tracker
+
+appRouter.get(
+  '/tracker/sheet',
+  handle(async (_req, res) => {
+    res.json({ url: await remembered('sheet-url', 10 * 60_000, () => trackerSheetUrl()) });
+  }),
+);
+
+// Meetings changed: callers that cache the recent list should refresh it.
+export function invalidateMeetingCaches() {
+  recentMeetings.reset();
+}

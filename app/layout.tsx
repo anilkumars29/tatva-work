@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { AppShell } from '@/components/tatva/AppShell';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -8,9 +9,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'Talk to your voice agent | Agora',
-  description:
-    "Next.js quickstart: real-time voice agent with live transcript, streaming audio, and low latency from Agora's Conversational AI Engine—API routes in one repo.",
+  title: 'Tatva Work',
+  description: 'Voice-first meeting assistant: meetings become knowledge, Pooja answers and acts.',
   icons: {
     icon: [
       { url: '/favicon.ico' },
@@ -39,8 +39,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full">
-      <body className="h-full min-h-screen">{children}</body>
+    <html lang="en" className="dark h-full" suppressHydrationWarning>
+      <head>
+        {/* Stitch "Studio Obsidian": Manrope headlines, Inter body, Material Symbols icons. */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Manrope:wght@100..900&display=swap" rel="stylesheet" />
+        {/* Icon font: "block" avoids flashing ligature names before it loads. */}
+        {/* eslint-disable-next-line @next/next/no-page-custom-font, @next/next/google-font-display */}
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet" />
+      </head>
+      <body className="h-full min-h-screen bg-surface font-body-md text-body-md text-on-surface antialiased">
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   );
 }
