@@ -9,6 +9,9 @@ import { groqPost } from '../groq.js';
 
 const execFileAsync = promisify(execFile);
 
+export const WHISPER_PROMPT =
+  'Indian English work meeting. Amounts use lakh and crore, for example 2 lakh rupees, 45 lakh, 1.5 crore, 40,000 rupees a month. Names like Priya, Rahul, Meera, Anil.';
+
 export interface Segment {
   start: number; // seconds from the start of the recording
   end: number;
@@ -40,6 +43,9 @@ async function transcribeFile(filePath: string, mimeType: string): Promise<Whisp
     form.append('timestamp_granularities[]', 'segment');
     form.append('temperature', '0');
     if (config.whisperLanguage) form.append('language', config.whisperLanguage);
+    // Vocabulary hint: Indian English meetings use lakh/crore; without this
+    // Whisper tends to write "2 lakh" as "Rs.2,000".
+    form.append('prompt', WHISPER_PROMPT);
     return { body: form, json: false };
   })) as WhisperResponse;
 }

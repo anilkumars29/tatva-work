@@ -13,9 +13,18 @@ immediately. Processing runs in the background, one meeting at a time:
 | ------ | ------------ |
 | `uploaded` | Audio stored in Supabase Storage (`meeting-audio/<id>/recording.webm`) |
 | `transcribing` | Groq Whisper `whisper-large-v3-turbo`, segment timestamps. Files over 24 MB are split with ffmpeg into 10-minute mono 16 kHz Opus chunks; timestamps are offset back to the full recording |
-| `extracting` | Groq `openai/gpt-oss-120b` with strict JSON-schema output (validated with zod): title, summary, decisions, action items, stats, key moments, discuss-later, time saved. Transcripts over ~10k chars are extracted in parts and merged; the output budget is sized per request to fit Groq's tokens-per-minute limit (`GROQ_LLM_TPM_LIMIT`, free tier 8000). Saved to Supabase |
+| `extracting` | Groq `openai/gpt-oss-120b` with strict JSON-schema output (validated with zod): title, summary, decisions, action items, stats, key moments, discuss-later. Transcripts over ~10k chars are extracted in parts and merged; the output budget is sized per request to fit Groq's tokens-per-minute limit (`GROQ_LLM_TPM_LIMIT`, free tier 8000). Saved to Supabase |
 | `indexing` | Chunks (summary, each item, ~900-char transcript windows) embedded locally with transformers.js `Xenova/all-MiniLM-L6-v2` (384 dims) into pgvector; Google Doc "Tatva: <title> (<date>)" created via Composio |
 | `ready` / `failed` | `failed` stores the error. Storage and Google Doc problems are not fatal; they're recorded in `warnings` |
+
+## Time saved
+
+Computed, not guessed ([src/pipeline/timesaved.ts](src/pipeline/timesaved.ts)), from the work Tatva does:
+meeting notes + Google Doc = 3 min + 20% of the meeting length; 1 min per action item and per
+follow-up topic captured; then, as actions linked to the meeting run (from the app or by voice):
+email 4 min, calendar invite 3, Slack post 2, tracker row 1 each, issue logged + escalated 3.
+A meeting's total is recomputed after processing and after each linked action
+(`recomputeTimeSaved`). The dashboard's weekly total also adds actions not tied to a meeting.
 
 ## API
 
@@ -78,6 +87,7 @@ pnpm run typecheck
 pnpm test            # unit tests: date resolution, yes/no detection (no secrets needed; also run in CI)
 pnpm run tunnel      # cloudflared quick tunnel for the voice agent (see below)
 pnpm run test:voice  # plays the demo script against /v1/chat/completions (add -- --no to cancel every action)
+pnpm run seed:demo-meetings  # voices 3 demo meetings with Murf Falcon (4 en-IN voices, not Pooja) and runs them through POST /api/meetings
 ```
 
 The first start downloads the embedding model (~90 MB) into

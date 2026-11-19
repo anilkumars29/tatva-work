@@ -16,7 +16,8 @@
     "test": "tsx --test test/*.test.ts",
     "seed:contacts": "tsx --env-file=.env scripts/seed-contacts.ts",
     "tunnel": "tsx --env-file=.env scripts/tunnel.ts",
-    "test:voice": "tsx --env-file=.env scripts/voice-demo.ts"
+    "test:voice": "tsx --env-file=.env scripts/voice-demo.ts",
+    "seed:demo-meetings": "tsx --env-file=.env --env-file=../.env.local scripts/demo-meetings.ts"
   },
   "dependencies": {
     "@composio/core": "^0.30.0",

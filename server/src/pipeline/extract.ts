@@ -32,10 +32,6 @@ export const knowledgeSchema = z.object({
       people: z.array(z.string()),
     }),
   ),
-  time_saved: z.object({
-    minutes: z.number(),
-    breakdown: z.array(z.object({ task: z.string(), minutes: z.number() })),
-  }),
 });
 
 export type Knowledge = z.infer<typeof knowledgeSchema>;
@@ -60,7 +56,6 @@ const jsonSchema = obj({
   stats_mentioned: arr(obj({ value: str, context: str, timestamp_sec: { type: ['number', 'null'] } })),
   key_moments: arr(obj({ timestamp_sec: { type: 'number' }, note: str })),
   discuss_later: arr(obj({ topic: str, suggested_time: nstr, suggested_datetime: str, people: arr(str) })),
-  time_saved: obj({ minutes: { type: 'number' }, breakdown: arr(obj({ task: str, minutes: { type: 'number' } })) }),
 });
 
 // ---- Prompts -------------------------------------------------------------------
@@ -89,7 +84,8 @@ Context:
 - Transcript lines start with [mm:ss] or [h:mm:ss] offsets from the start of the recording. Speakers are not labelled.
 
 Fields:
-- title: short, specific meeting title (max 8 words). Not "Meeting" or the tab title verbatim.
+- title: if the browser tab title contains the meeting's own name (e.g. "Q4 Vendor Review - Google Meet" -> "Q4 Vendor Review", "Hiring Plan Sync | Microsoft Teams" -> "Hiring Plan Sync"), use that name without the app suffix. Otherwise (no tab title, or only an app name / meeting code like "Meet - abc-defg-hij") write a short, specific title (max 8 words), never just "Meeting".
+- Amounts: keep Indian units as spoken ("2 lakh", "45 lakh", "1.5 crore"); never convert lakh to thousands.
 - summary: 3-6 sentences: purpose, main outcomes, next steps.
 - decisions: things agreed or decided. context = why / constraints, or null.
 - action_items: concrete tasks someone committed to or was asked to do. due = deadline as spoken, or null. due_date = YYYY-MM-DD if the deadline can be resolved, else null.
@@ -101,7 +97,6 @@ Fields:
 - stats_mentioned: every number, amount, percentage, date-bound target or metric, with what it refers to. value = the figure as spoken (e.g. "4.5 lakh", "20%"). timestamp_sec = seconds offset where it was said, or null.
 - key_moments: 3-8 important moments (decision made, problem raised, disagreement, commitment). timestamp_sec = seconds offset.
 - discuss_later: EVERY topic planned for a future meeting, discussion, review or check-in, including ones that are also a decision or an action item (list them in both places). Triggers include "let's discuss X on Tuesday", "review it next week", "park this", "revisit after the launch", "sync with Priya on Friday", "follow up next month". suggested_time = when, as spoken, or null if no time was given. suggested_datetime = ALWAYS an ISO 8601 date-time with the local offset (e.g. 2026-11-24T15:00:00+05:30), using the calendar above: exact day and time if both were said; a day without a time -> 11:00 that day; "morning" -> 10:00, "afternoon" -> 15:00, "evening" -> 17:00; "next week" -> Monday of next week 11:00; "next month" -> first working day of next month 11:00; "after <event>" -> the working day after that event 11:00 if its date is known; no timing at all -> 2 working days after the meeting at 11:00. Never a weekend. people = names involved (may be empty).
-- time_saved: realistic minutes this assistant saves the team versus doing it manually: writing notes, the summary, tracking action items, drafting follow-up emails, scheduling follow-ups. Base it on meeting length and how many items there are. breakdown lists each task with its minutes; minutes = their sum.
 
 Use empty arrays when there is nothing for a field.`;
 }
@@ -217,21 +212,16 @@ export async function extractKnowledge(segments: Segment[], meta: MeetingMeta): 
       partials.push(
         await callLlm(
           system,
-          `This is part ${i + 1} of ${parts.length} of a longer meeting. Extract only what is in this part; for time_saved estimate this part only.\n\nTranscript:\n${transcriptLines(part)}`,
+          `This is part ${i + 1} of ${parts.length} of a longer meeting. Extract only what is in this part.\n\nTranscript:\n${transcriptLines(part)}`,
         ),
       );
     }
     console.log('[extract] merging parts');
     knowledge = await callLlm(
       system,
-      `Below are structured extractions from consecutive parts of ONE meeting, in order. Merge them into a single result for the whole meeting: one title and summary, deduplicated decisions / action items / stats / discuss-later items, the 3-8 most important key moments, and one time_saved estimate for the whole meeting. Keep timestamps as given.\n\n${JSON.stringify(partials)}`,
+      `Below are structured extractions from consecutive parts of ONE meeting, in order. Merge them into a single result for the whole meeting: one title and summary, deduplicated decisions / action items / stats / discuss-later items, and the 3-8 most important key moments. Keep timestamps as given.\n\n${JSON.stringify(partials)}`,
     );
   }
-
-  // Keep the estimate sane and consistent.
-  const cap = Math.round(meta.durationMinutes * 3 + 60);
-  const minutes = Math.min(Math.max(0, Math.round(knowledge.time_saved.minutes)), cap);
-  knowledge.time_saved = { ...knowledge.time_saved, minutes };
 
   // Check resolved dates against what was said (weekday maths), then make sure
   // every discuss-later item has a usable suggested date/time.
