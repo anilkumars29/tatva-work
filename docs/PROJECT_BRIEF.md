@@ -63,7 +63,7 @@ Tatva Work is a voice-first, agentic meeting assistant for teams.
 
 | Path         | What lives there |
 | ------------ | ---------------- |
-| `/` (root)   | Existing Next.js app (web app + Agora voice agent) |
+| `/` (root)   | Next.js web app: Dashboard, Meetings, Talk to Tatva (Agora voice agent), Knowledge Base, Tracker, Contacts (`components/tatva/`) |
 | `extension/` | Chrome extension (Manifest V3) |
 | `server/`    | Node + TypeScript backend |
 
@@ -91,7 +91,8 @@ never be hardcoded or committed.
 | 1 | `extension/`: popup Start/Stop + timer; record tab audio + mic mixed via `chrome.tabCapture` + offscreen document; tab keeps playing; on Stop, download a `.webm` | Done |
 | 2 | `server/`: `POST/GET /api/meetings`; extension uploads on Stop (local backup kept) and shows Processing… → Ready; pipeline: Supabase Storage → Groq Whisper (chunked) → Groq extraction (title, summary, decisions, action items, stats, key moments, discuss-later, time saved) → Supabase tables → local embeddings in pgvector (`match_knowledge_chunks`, `POST /api/search`) → Google Doc via Composio; per-meeting status | Done |
 | 3 | Voice agent on localhost: `server/` `POST /v1/chat/completions` (OpenAI-compatible SSE) as Agora's custom LLM via cloudflared; per-turn pgvector RAG + Groq tool calling; read tools (`search_knowledge`, `list_recent_meetings`, `get_meeting_details`, `get_open_items`, `brief_me`); actions via Composio (`send_email`, `post_to_slack` #hack, `create_calendar_event`, `add_tracker_row` "Tatva Tracker"), each read back and run only after a spoken yes (`pending_actions`); spoken error + retry; follow-up offers; `contacts` table (seeded); every tool call in `activity_log`; web app `invite-agent` uses `CUSTOM_LLM_URL` with Murf Falcon + Deepgram `en-IN` kept. Tested end to end over the tunnel with real Gmail / Calendar / Slack / Sheets actions (`pnpm run test:voice`); Agora accepts the agent config. Voice-tested live for answers, email, calendar and Slack | Done |
-| 4+ | Company docs (SOP / project-plan PDFs) in the knowledge base, time-saved counter and activity feed in the web app, one-click actions, demo polish, deployment | Not started |
+| 4 | Web app rebuilt from the Stitch designs (project 950328494615631971, "Studio Obsidian") with real data from `server/` (Next.js proxies `/tatva/*` to `server/` `/api/*`): **Dashboard** (meetings, open items, actions by Tatva and time saved this week, all computed; live processing status; next calendar event; "Brief me"; Ping on Slack; Mark Complete → Supabase + tracker sheet), **Meeting page** (signed-URL audio with decoded waveform, key-moment pins, seekable/searchable transcript; Google Doc, email, Slack, Add to Calendar through confirm dialogs that show the server's read-back), **Talk to Tatva** (Agora + Murf voice agent embedded; live transcript; chips and text box send text to Pooja over RTM and she answers aloud; "What Tatva is doing" timeline from `activity_log` + `pending_actions`; Approve & Send / Cancel), **Knowledge Base** (semantic search across meetings and PDFs; PDF upload → Storage → text → chunks → local embeddings, Pooja answers from it), **Tracker** (real KPIs, filters, sort, search, CSV, pagination, status toggle, activity log with connector filter, Issues via the `log_issue` voice tool or "Log issue" dialog: tracker row + Slack escalation after confirmation), **Contacts** (add/edit/export; roles). Only "Coming soon": Export Jira/Asana, Edit draft. Extension shows as connected via a content-script marker | Done |
+| 5+ | Latency polish (see below), demo polish, deployment | Not started |
 
 ### Polish backlog
 

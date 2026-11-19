@@ -29,12 +29,34 @@ immediately. Processing runs in the background, one meeting at a time:
 | `POST` | `/v1/chat/completions` | Voice agent custom LLM for Agora (OpenAI-compatible SSE). `Authorization: Bearer $VOICE_LLM_API_KEY`, optional `X-Tatva-Session` |
 | `GET` | `/health` | `{ ok: true }` |
 
+Web app endpoints (Milestone 4; the Next.js app calls them as `/tatva/*`; local only, the tunnel blocks `/api`):
+
+| Method | Path | Notes |
+| ------ | ---- | ----- |
+| `GET` | `/api/dashboard` | stats (meetings, open items, Tatva actions and time saved this week), meetings, open items |
+| `GET` | `/api/calendar/next` | next Google Calendar event (cached 60 s) |
+| `GET` | `/api/status` | Composio connection per toolkit |
+| `GET` | `/api/meetings/:id/audio` | signed Storage URL for the recording (1 h) |
+| `POST` | `/api/meetings/:id/gdoc` | create the meeting's Google Doc if missing |
+| `POST` | `/api/actions/preview` | `{ kind, input }` → the read-back sentence (same as Pooja's) |
+| `POST` | `/api/actions/execute` | `{ kind, input }` → runs the Composio action (after the app's confirm dialog), logged with session `web` |
+| `PATCH` | `/api/action-items/:id` | `{ status: open\|done }` → Supabase + tracker sheet Status cell |
+| `GET/POST/PATCH` | `/api/contacts`, `/api/contacts/:id` | contacts with roles |
+| `GET` | `/api/voice/timeline?session=` | activity_log + pending action for a call (session = Agora channel) |
+| `POST` | `/api/voice/pending/:id/confirm` \| `/cancel` | approve / cancel outside a call |
+| `GET` | `/api/voice/stats` | counts for "Meeting Artifacts Loaded" |
+| `POST` | `/api/documents` | multipart `file` (PDF ≤ 25 MB) → Storage `documents`, then text → chunks → embeddings (async) |
+| `GET` | `/api/documents`, `/api/documents/:id/url[?download=1]` | list; signed preview/download URL |
+| `GET` | `/api/knowledge/search?q=&type=` | semantic search across meetings and documents |
+| `GET` | `/api/tracker`, `/api/activity` | all tracker items (tasks + issues); executed actions |
+
 ## Setup
 
 1. `server/.env` needs `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `GROQ_API_KEY`,
    `COMPOSIO_API_KEY` (template: [env.example](env.example)).
-2. Run [supabase/migrations/001_init.sql](supabase/migrations/001_init.sql) and
-   [002_voice_agent.sql](supabase/migrations/002_voice_agent.sql) once in
+2. Run [supabase/migrations/001_init.sql](supabase/migrations/001_init.sql),
+   [002_voice_agent.sql](supabase/migrations/002_voice_agent.sql) and
+   [003_web_app.sql](supabase/migrations/003_web_app.sql) once in
    the Supabase dashboard → SQL Editor. It creates the tables, pgvector, the
    `meeting-audio` bucket and `match_knowledge_chunks`. RLS is on with no
    policies: only the server's secret key can access the data.
@@ -44,7 +66,7 @@ immediately. Processing runs in the background, one meeting at a time:
    cd server
    pnpm install
    pnpm run check:env       # env, Supabase schema, Groq models, Composio toolkits, ffmpeg
-   pnpm run seed:contacts   # demo contacts (Priya, Rahul, Meera, Anil) so "email Priya" resolves
+   pnpm run seed:contacts   # Priya Sharma, Rahul Das, Meera Nair (DEMO_CONTACT_EMAIL) and Anil K. (DEMO_OWNER_EMAIL)
    ```
 
 ## Run
@@ -94,7 +116,8 @@ Agora Conversational AI uses this server as its **custom LLM**
    (next Google Calendar event, else the next parked topic, plus related notes
    and open items).
 3. **Confirm:** action tools (`send_email`, `post_to_slack` to `#hack`,
-   `create_calendar_event`, `add_tracker_row` in the "Tatva Tracker" sheet) never
+   `create_calendar_event`, `add_tracker_row` in the "Tatva Tracker" sheet,
+   `log_issue`: tracker row of type Issue + Slack escalation to the owner) never
    run directly. The server resolves contacts, meeting content and dates, stores
    a `pending_actions` row, and speaks a fixed read-back ("I'll email Priya
    Sharma the action items from ... Should I send it?"). The next turn runs it

@@ -60,6 +60,16 @@ The sections below (Start Here, Patterns, Anti-Patterns, etc.) remain the canoni
 
 ## Key Files
 
+Tatva Work web app (Milestone 4):
+
+- `components/tatva/` — Stitch screens: `Dashboard`, `MeetingsList`, `MeetingDetails`, `talk/TalkToTatva`, `KnowledgeBase`, `Tracker`, `Contacts`; shared `AppShell`, `ui` (toasts, confirm dialogs, `ComingSoon`), `activity` (activity_log → readable steps), `types`.
+- `components/tatva/talk/VoiceBridge.tsx` — the live voice session. It follows every pattern below (isReady guard, `useJoin` owns leave, mic hook owns the track, mute via `setEnabled`, `AgoraVoiceAI.init` once on `isReady && joinSuccess`) and exposes `sendText` (RTM text → custom LLM → spoken reply), `speak`, and mute.
+- `lib/tatva.ts` + `hooks/use-api.ts` — all data goes through `/tatva/*`, rewritten in `next.config.mjs` to `server/` `/api/*`. Never call Supabase or Composio from the browser.
+- Rules: every visible button must do something real; numbers shown must be computed from data; outward actions (email, Slack, calendar, sheets, issues) go through the confirm dialog (`runAction`) which shows the server's read-back from `/api/actions/preview`.
+- `LandingPage.tsx`, `ConversationComponent.tsx` and the `Quickstart*` components are the original quickstart UI. They are not routed any more; keep them only as reference.
+
+Quickstart files:
+
 - `app/api/generate-agora-token/route.ts`: issues RTC + RTM tokens for the browser user.
 - `app/api/invite-agent/route.ts`: starts the managed agent session; edit here for VAD, model, or voice changes. With `CUSTOM_LLM_URL` set, the real system prompt, RAG, and tools live in `server/src/voice/` (the route's `POOJA_PROMPT` is only the no-tools fallback). TTS is Murf Falcon via `MurfWithStyleTTS`, a small `MurfTTS` subclass that adds `params.style` (the SDK's `MurfTTSOptions` has no `style` field).
 - `app/api/stop-conversation/route.ts`: stops the agent session.

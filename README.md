@@ -1,3 +1,21 @@
+# Tatva Work (web app)
+
+Voice-first meeting assistant. This Next.js app is the Tatva Work web app,
+built from the Stitch designs: **Dashboard**, **Meetings** (with a meeting page),
+**Talk to Tatva** (the Agora + Murf Falcon voice agent, Pooja), **Knowledge
+Base**, **Tracker** and **Contacts**. All data comes from the Tatva server in
+[`server/`](server/README.md), which the app reaches through a Next.js rewrite
+(`/tatva/*` → `http://localhost:4000/api/*`, override with `TATVA_SERVER_URL`).
+Product brief: [docs/PROJECT_BRIEF.md](docs/PROJECT_BRIEF.md).
+
+Run `server/` (`pnpm run dev`), the tunnel (`pnpm run tunnel` in `server/`, for
+the voice agent) and this app (`pnpm run dev`), then open http://localhost:3000.
+Load `extension/` unpacked in Chrome to record meetings; the sidebar shows
+"Extension connected" when it is installed.
+
+The rest of this README is the original Agora quickstart reference, which the
+voice layer is still built on.
+
 # Agora Conversational AI Next.js Quickstart
 
 [![Build](https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs/actions/workflows/build-check.yml/badge.svg)](https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs/actions/workflows/build-check.yml)
@@ -166,6 +184,17 @@ NEXT_ELEVENLABS_VOICE_ID=...
 ```
 
 ## Repo Map
+
+Tatva Work app:
+
+- `app/page.tsx`, `app/meetings/`, `app/talk/`, `app/knowledge/`, `app/tracker/`, `app/contacts/` — routes
+- `components/tatva/AppShell.tsx` — sidebar shell, extension detection, toasts and confirm dialogs (`ui.tsx`)
+- `components/tatva/talk/VoiceBridge.tsx` — headless RTC/RTM/AgoraVoiceAI session (same hook rules as below)
+- `components/tatva/talk/TalkToTatva.tsx` — voice screen: transcript, sendText chips/text box, live timeline, approvals
+- `lib/tatva.ts` — `/tatva` API client and formatters; `hooks/use-api.ts` — polling fetch hook
+
+Quickstart (the voice layer this app grew from; the old `LandingPage` /
+`ConversationComponent` screens are no longer routed and are kept as reference):
 
 - `app/api/generate-agora-token/route.ts` — issues RTC + RTM tokens
 - `app/api/invite-agent/route.ts` — starts the agent session and configures the pipeline

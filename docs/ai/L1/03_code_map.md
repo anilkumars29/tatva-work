@@ -15,6 +15,13 @@ public/              Static assets and branding
 types/               Shared TypeScript route/component contracts
 ```
 
+## Tatva Work App (Milestone 4)
+
+- Routes: `/` Dashboard, `/meetings`, `/meetings/[id]`, `/talk`, `/knowledge`, `/tracker`, `/contacts`.
+- Screens live in `components/tatva/`; the voice session is `components/tatva/talk/VoiceBridge.tsx` (quickstart hook rules apply).
+- Data: `lib/tatva.ts` `api()` → `/tatva/*` → `server/` `/api/*` (rewrite in `next.config.mjs`). Server routes: `server/src/routes/app.ts` (dashboard, actions preview/execute, action items, contacts, voice timeline/approvals), `server/src/routes/knowledge.ts` (documents, knowledge search, tracker, activity).
+- `LandingPage.tsx` / `ConversationComponent.tsx` / `Quickstart*` are legacy reference, not routed.
+
 ## API Route Ownership (`app/api`)
 
 - `generate-agora-token/route.ts`: builds RTC+RTM token via `buildTokenWithRtm`.
