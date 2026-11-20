@@ -68,6 +68,18 @@ test('dashboard', async () => {
   await page.goto('/');
   await page.getByRole('link', { name: 'Talk to Tatva' }).first().click();
   await expect(page).toHaveURL(/\/talk/);
+  // The four stat cards open the page behind each number.
+  for (const [card, url, check] of [
+    [/^Meetings Recorded/i, /\/meetings$/, null],
+    [/^Open Action Items/i, /\/tracker\?filter=pending$/, () => page.locator('button[aria-pressed="true"]', { hasText: 'Pending' })],
+    [/^Actions by Tatva/i, /\/tracker\?view=activity$/, () => page.getByRole('tab', { name: /^Activity log/, selected: true })],
+    [/^Time Saved This Week/i, /\/meetings\?sort=time_saved$/, () => page.getByRole('tab', { name: /Time saved/, selected: true })],
+  ] as const) {
+    await page.goto('/');
+    await page.getByRole('link', { name: card }).click();
+    await expect(page).toHaveURL(url);
+    if (check) await expect(check()).toBeVisible();
+  }
 });
 
 test('meetings list: filter and open', async () => {
@@ -132,7 +144,7 @@ test('talk page renders (call is tested in voice.spec.ts)', async () => {
 
 test('knowledge base: tabs, search, preview, download, upload picker', async () => {
   await page.goto('/knowledge');
-  for (const tab of [/^Meetings/, /^Documents/, /^Attachments/, /^All/]) await page.getByRole('button', { name: tab }).first().click();
+  for (const tab of [/^Meetings/, /^Documents/, /^Attachments/, /^All/]) await page.getByRole('tab', { name: tab }).first().click();
   await page.getByPlaceholder(/Ask or search/).fill('premium tier price');
   await page.getByPlaceholder(/Ask or search/).press('Enter');
   await expect(page.getByText(/% match/).first()).toBeVisible({ timeout: 30_000 });
@@ -156,9 +168,9 @@ test('knowledge base: tabs, search, preview, download, upload picker', async () 
 
 test('tracker: tabs, filters, sort, CSV, paging, log issue (cancelled), sheet', async () => {
   await page.goto('/tracker');
-  await page.getByRole('button', { name: /^Activity log/ }).click();
+  await page.getByRole('tab', { name: /^Activity log/ }).click();
   await expect(page.getByText(/Sent|Posted|Created|Logged|Searched|Uploaded/).first()).toBeVisible();
-  await page.getByRole('button', { name: /^Action items/ }).click();
+  await page.getByRole('tab', { name: /^Action items/ }).click();
   for (const f of [/^Pending\s*\d/, /^Done\s*\d/, /^Issues\s*\d/, /^All\s*\d/]) await page.getByRole('button', { name: f }).click();
   await page.getByRole('button', { name: /Due date/ }).click();
   await page.getByPlaceholder(/Filter actions or owners/).fill('Priya');

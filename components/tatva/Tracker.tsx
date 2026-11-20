@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApi } from '@/hooks/use-api';
 import { api, downloadText, dueLabel, initials, plural, relativeDateTime, toCsv, todayYmd } from '@/lib/tatva';
 import { describe, type Activity } from './activity';
 import type { Contact, TrackerItem } from './types';
-import { EmptyState, Field, Icon, inputClass, Spinner, useTatvaUi } from './ui';
+import { EmptyState, ErrorState, Field, Icon, inputClass, Skeleton, Spinner, useTatvaUi } from './ui';
 
 const PAGE_SIZE = 6;
 type Filter = 'all' | 'pending' | 'done' | 'issues';
@@ -32,13 +33,30 @@ export default function Tracker() {
   const activity = useApi<{ activity: Activity[] }>('/activity', { refreshMs: 10_000 });
   const sheet = useApi<{ url: string }>('/tracker/sheet');
   const contacts = useApi<{ contacts: Contact[] }>('/contacts');
-  const [view, setView] = useState<'items' | 'activity'>('items');
-  const [filter, setFilter] = useState<Filter>('all');
+  // Tab and filter live in the URL (?view=activity, ?filter=pending), so the
+  // dashboard cards can link straight to them.
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const view: 'items' | 'activity' = params.get('view') === 'activity' ? 'activity' : 'items';
+  const filterParam = params.get('filter');
+  const filter: Filter = filterParam === 'pending' || filterParam === 'done' || filterParam === 'issues' ? filterParam : 'all';
+  const setUrl = (next: { view?: 'items' | 'activity'; filter?: Filter }) => {
+    const q = new URLSearchParams();
+    const v = next.view ?? view;
+    const f = next.filter ?? filter;
+    if (v === 'activity') q.set('view', 'activity');
+    else if (f !== 'all') q.set('filter', f);
+    router.replace(q.size ? `${pathname}?${q}` : pathname, { scroll: false });
+  };
+  const setView = (v: 'items' | 'activity') => setUrl({ view: v });
+  const setFilter = (f: Filter) => setUrl({ view: 'items', filter: f });
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<Sort>('due');
   const [page, setPage] = useState(0);
   const [connector, setConnector] = useState('All Connectors');
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const [, tick] = useState(0);
@@ -51,6 +69,18 @@ export default function Tracker() {
     return () => clearInterval(id);
   }, []);
   useEffect(() => setPage(0), [filter, query, sort]);
+  // The connector menu closes on an outside click or Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => menuRef.current && !menuRef.current.contains(e.target as Node) && setMenuOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false);
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
 
   const items = useMemo(() => data?.items ?? [], [data]);
   const today = todayYmd();
@@ -157,7 +187,7 @@ export default function Tracker() {
   const ago = updatedAt ? Math.round((Date.now() - updatedAt) / 1000) : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-[1520px] flex-col gap-space-xl px-space-xl py-space-xl">
+    <div className="mx-auto flex w-full max-w-[1520px] flex-col gap-space-xl px-space-md py-space-xl sm:px-space-xl">
       <div className="flex flex-col justify-between gap-space-lg md:flex-row md:items-center">
         <div className="flex flex-col gap-space-xs">
           <div className="flex items-center gap-space-sm">
@@ -170,7 +200,7 @@ export default function Tracker() {
           <p className="font-body-md text-body-md text-on-surface-variant">Action items and issues, synced with Google Sheets</p>
         </div>
         <div className="flex flex-wrap items-center gap-space-md">
-          <div className="flex items-center gap-2 rounded-full bg-surface-container-low px-space-md py-2 font-caption text-caption text-on-surface-variant shadow-sm">
+          <div className="flex items-center gap-2 whitespace-nowrap rounded-full bg-surface-container-low px-space-md py-2 font-caption text-caption text-on-surface-variant shadow-sm">
             <span className={`h-2 w-2 rounded-full ${error ? 'bg-error' : 'bg-tertiary-fixed'}`} />
             <span>
               {error ? 'Sync paused: server unreachable' : 'Live Sync active'} <span className="text-secondary/40">·</span>{' '}
@@ -180,7 +210,7 @@ export default function Tracker() {
           <button
             type="button"
             onClick={logIssue}
-            className="inline-flex items-center gap-space-sm rounded-lg bg-surface-container px-space-md py-2 font-label-md text-label-md text-on-surface shadow-sm transition-all hover:bg-surface-container-high hover:text-error active:scale-[0.99] border border-hairline"
+            className="inline-flex items-center gap-space-sm rounded-lg border border-hairline bg-surface-container px-space-md py-2 font-label-md text-label-md text-on-surface shadow-sm transition-all hover:border-hairline-strong hover:bg-surface-container-high hover:text-error"
           >
             <Icon name="report" className="text-[18px] text-error" />
             <span>Log issue</span>
@@ -190,24 +220,28 @@ export default function Tracker() {
             target="_blank"
             rel="noopener noreferrer"
             aria-disabled={!sheet.data}
+            aria-busy={sheet.loading}
+            title={sheet.error ? `Google Sheets is unavailable: ${sheet.error}` : undefined}
             onClick={(e) => !sheet.data && e.preventDefault()}
-            className={`inline-flex items-center gap-space-sm rounded-lg bg-surface-container px-space-md py-2 font-label-md text-label-md text-on-surface shadow-sm transition-all hover:bg-surface-container-high hover:text-primary-container active:scale-[0.99] ${sheet.data ? '' : 'opacity-50'} border border-hairline`}
+            className={`inline-flex items-center gap-space-sm rounded-lg border border-hairline bg-surface-container px-space-md py-2 font-label-md text-label-md text-on-surface shadow-sm transition-all ${
+              sheet.data ? 'hover:border-hairline-strong hover:bg-surface-container-high hover:text-primary-container' : ''
+            }`}
           >
             <Icon name="table_chart" className="text-[18px] text-tertiary-container" />
             <span>Open in Google Sheets</span>
-            {sheet.data ? <Icon name="open_in_new" className="text-[16px] text-on-surface-variant" /> : <Spinner className="text-[16px]" />}
+            {sheet.data ? <Icon name="open_in_new" className="text-[16px] text-on-surface-variant" /> : sheet.error ? <Icon name="error" className="text-[16px] text-error" /> : <Spinner className="text-[16px]" />}
           </a>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-space-md sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi label="Total Commitments" value={counts.all} icon="task_alt" tone="text-on-surface" iconTone="text-on-surface-variant" />
-        <Kpi label="Pending Execution" value={counts.pending} icon="pending_actions" tone="text-primary-fixed-dim" iconTone="text-primary-fixed-dim" />
-        <Kpi label="Completed" value={counts.done} icon="verified" tone="text-tertiary-fixed" iconTone="text-tertiary-fixed" />
-        <Kpi label="Attention Needed" value={counts.attention} icon="error" tone="text-error" iconTone="text-error" iconBg="bg-error-container/40" title="Open issues and overdue items" />
+        <Kpi label="Total Commitments" value={data ? counts.all : null} icon="task_alt" tone="text-on-surface" iconTone="text-on-surface-variant" onClick={() => setFilter('all')} title="Show all items" />
+        <Kpi label="Pending Execution" value={data ? counts.pending : null} icon="pending_actions" tone="text-primary-fixed-dim" iconTone="text-primary-fixed-dim" onClick={() => setFilter('pending')} title="Show pending items" />
+        <Kpi label="Completed" value={data ? counts.done : null} icon="verified" tone="text-tertiary-fixed" iconTone="text-tertiary-fixed" onClick={() => setFilter('done')} title="Show completed items" />
+        <Kpi label="Attention Needed" value={data ? counts.attention : null} icon="error" tone="text-error" iconTone="text-error" iconBg="bg-error-container/40" onClick={() => setFilter('issues')} title="Open issues and overdue items: show issues" />
       </div>
 
-      <div className="flex items-center gap-space-lg">
+      <div role="tablist" aria-label="Tracker views" className="flex items-center gap-space-lg overflow-x-auto">
         <TabButton active={view === 'items'} onClick={() => setView('items')} icon="checklist" label="Action items" count={counts.all} />
         <TabButton active={view === 'activity'} onClick={() => setView('activity')} icon="history_toggle_off" label="Activity log" count={activity.data?.activity.length ?? 0} />
       </div>
@@ -227,9 +261,10 @@ export default function Tracker() {
                 <button
                   key={id}
                   type="button"
+                  aria-pressed={filter === id}
                   onClick={() => setFilter(id)}
                   className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 font-label-sm text-label-sm transition-colors ${
-                    filter === id ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
+                    filter === id ? 'bg-primary-container text-on-primary-container hover:bg-primary-fixed' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
                   }`}
                 >
                   <span>{label}</span>
@@ -239,23 +274,25 @@ export default function Tracker() {
             </div>
             <div className="flex items-center gap-space-sm">
               <div className="relative flex-1 sm:w-72">
-                <Icon name="search" className="absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-on-surface-variant" />
+                <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-on-surface-variant" />
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  className="w-full rounded-lg bg-surface-container-lowest py-2 pl-9 pr-space-md font-body-sm text-body-sm text-on-surface outline-none transition-all placeholder:text-on-surface-variant/60 focus:ring-1 focus:ring-primary-container"
-                  placeholder="Filter actions or owners..."
+                  aria-label="Filter actions or owners"
+                  className="w-full rounded-lg border border-hairline bg-surface-container-lowest py-2 pl-9 pr-space-md font-body-sm text-body-sm text-on-surface outline-none transition-all placeholder:text-on-surface-variant/60 hover:border-hairline-strong focus:ring-1 focus:ring-primary-container"
+                  placeholder="Filter actions or owners…"
                   type="text"
                 />
               </div>
               <button
                 type="button"
                 title={`Sort: ${SORT_LABEL[sort]} (click to change)`}
+                aria-label={`Sort: ${SORT_LABEL[sort]}. Click to change.`}
                 onClick={() => setSort((s) => (s === 'due' ? 'newest' : s === 'newest' ? 'owner' : 'due'))}
                 className="flex items-center gap-1 rounded-lg bg-surface-container p-2 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface border border-hairline"
               >
                 <Icon name="sort" className="text-[20px]" />
-                <span className="hidden font-caption text-caption xl:inline">{SORT_LABEL[sort]}</span>
+                <span className="hidden whitespace-nowrap font-caption text-caption xl:inline">{SORT_LABEL[sort]}</span>
               </button>
               <button
                 type="button"
@@ -284,17 +321,46 @@ export default function Tracker() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-container/60 font-body-md text-body-md text-on-surface">
-                  {!data && !error && (
-                    <tr>
-                      <td colSpan={6} className="p-space-xl text-center text-on-surface-variant">
-                        <Spinner />
-                      </td>
-                    </tr>
-                  )}
+                  {!data &&
+                    (error ? (
+                      <tr>
+                        <td colSpan={6}>
+                          <ErrorState title="Couldn't load the tracker" message={error} onRetry={reload} />
+                        </td>
+                      </tr>
+                    ) : (
+                      Array.from({ length: 4 }, (_, n) => (
+                        <tr key={n} aria-hidden="true">
+                          <td className="px-space-lg py-space-md">
+                            <Skeleton className="mb-2 h-3.5 w-48" />
+                            <Skeleton className="h-3 w-28" />
+                          </td>
+                          <td className="px-space-md py-space-md">
+                            <Skeleton className="h-7 w-40 rounded-lg" />
+                          </td>
+                          <td className="px-space-md py-space-md">
+                            <Skeleton className="h-7 w-24 rounded-full" />
+                          </td>
+                          <td className="px-space-md py-space-md">
+                            <Skeleton className="h-3.5 w-24" />
+                          </td>
+                          <td className="px-space-md py-space-md">
+                            <Skeleton className="h-6 w-20 rounded-full" />
+                          </td>
+                          <td className="px-space-lg py-space-md">
+                            <Skeleton className="ml-auto h-6 w-14" />
+                          </td>
+                        </tr>
+                      ))
+                    ))}
                   {data && shown.length === 0 && (
                     <tr>
                       <td colSpan={6}>
-                        <EmptyState icon="checklist" title={query || filter !== 'all' ? 'Nothing matches this view' : 'No action items yet'} />
+                        <EmptyState
+                          icon="checklist"
+                          title={query || filter !== 'all' ? 'Nothing matches this view' : 'No action items yet'}
+                          body={query || filter !== 'all' ? 'Clear the search or pick another filter.' : 'Action items from your meetings appear here.'}
+                        />
                       </td>
                     </tr>
                   )}
@@ -307,23 +373,29 @@ export default function Tracker() {
                         <td className="px-space-lg py-space-md">
                           <div className="flex min-w-0 flex-col">
                             <div className="flex items-center gap-2">
-                              <span className={`font-medium transition-colors group-hover:text-primary ${done ? 'text-on-surface-variant line-through' : 'text-on-surface'}`}>{i.task}</span>
+                              <span className={`line-clamp-2 font-medium transition-colors group-hover:text-primary ${done ? 'text-on-surface-variant line-through' : 'text-on-surface'}`}>{i.task}</span>
                               {issue && !done && <span className="h-2 w-2 animate-ping rounded-full bg-error" />}
                             </div>
                             {(i.context || i.due_text) && (
-                              <span className={`truncate font-body-sm text-body-sm ${issue && !done ? 'text-error/80' : 'text-on-surface-variant'}`}>{i.context ?? `Said: due ${i.due_text}`}</span>
+                              <span className={`max-w-[22rem] truncate font-body-sm text-body-sm ${issue && !done ? 'text-error/80' : 'text-on-surface-variant'}`} title={i.context ?? undefined}>
+                                {i.context ?? `Said: due ${i.due_text}`}
+                              </span>
                             )}
                           </div>
                         </td>
                         <td className="px-space-md py-space-md">
                           {i.meeting_id ? (
-                            <Link href={`/meetings/${i.meeting_id}`} className="inline-flex items-center gap-1.5 rounded-lg bg-surface-container px-2.5 py-1 font-caption text-caption text-on-surface transition-colors hover:bg-surface-variant border border-hairline">
-                              <Icon name={issue ? 'priority_high' : 'groups'} className={`text-[14px] ${issue ? 'text-error' : 'text-on-surface-variant'}`} />
-                              <span>{i.meeting}</span>
-                              {i.meeting_date && <span className="text-on-surface-variant">· {relativeDateTime(i.meeting_date).split(',')[0]}</span>}
+                            <Link
+                              href={`/meetings/${i.meeting_id}`}
+                              title={`${i.meeting ?? 'Meeting'}${i.meeting_date ? ` · ${relativeDateTime(i.meeting_date)}` : ''}`}
+                              className="inline-flex max-w-[15rem] items-center gap-1.5 whitespace-nowrap rounded-lg border border-hairline bg-surface-container px-2.5 py-1 font-caption text-caption text-on-surface transition-colors hover:border-hairline-strong hover:bg-surface-variant"
+                            >
+                              <Icon name={issue ? 'priority_high' : 'groups'} className={`shrink-0 text-[14px] ${issue ? 'text-error' : 'text-on-surface-variant'}`} />
+                              <span className="truncate">{i.meeting}</span>
+                              {i.meeting_date && <span className="shrink-0 text-on-surface-variant">· {relativeDateTime(i.meeting_date).split(',')[0]}</span>}
                             </Link>
                           ) : (
-                            <span className="inline-flex items-center gap-1.5 rounded-lg bg-surface-container px-2.5 py-1 font-caption text-caption text-on-surface-variant border border-hairline">
+                            <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-hairline bg-surface-container px-2.5 py-1 font-caption text-caption text-on-surface-variant">
                               <Icon name="mic" className="text-[14px] text-on-surface-variant" />
                               {i.source === 'web' ? 'Logged in the app' : 'Logged by voice'}
                             </span>
@@ -331,16 +403,16 @@ export default function Tracker() {
                         </td>
                         <td className="px-space-md py-space-md">
                           {i.owner ? (
-                            <div className="flex items-center gap-2">
-                              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-container-highest font-label-sm text-label-sm font-bold text-on-surface">{initials(i.owner)}</div>
-                              <span className="font-label-md text-label-md text-on-surface">{i.owner}</span>
+                            <div className="flex items-center gap-2 whitespace-nowrap">
+                              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-container-highest font-label-sm text-label-sm font-bold text-on-surface">{initials(i.owner)}</div>
+                              <span className="max-w-[9rem] truncate font-label-md text-label-md text-on-surface" title={i.owner}>{i.owner}</span>
                             </div>
                           ) : (
                             <span className="font-body-sm text-body-sm text-on-surface-variant">Unassigned</span>
                           )}
                         </td>
                         <td className="px-space-md py-space-md">
-                          <div className={`inline-flex items-center gap-1.5 font-body-sm text-body-sm ${late ? 'font-semibold text-error' : 'text-on-surface-variant'}`}>
+                          <div className={`inline-flex items-center gap-1.5 whitespace-nowrap font-body-sm text-body-sm ${late ? 'font-semibold text-error' : 'text-on-surface-variant'}`}>
                             <Icon name={done ? 'done_all' : late ? 'schedule' : 'calendar_today'} className="text-[16px]" />
                             <span>{i.due_date ? `${late ? 'Overdue · ' : ''}${dueLabel(i.due_date)}` : (i.due_text ?? '—')}</span>
                           </div>
@@ -349,9 +421,10 @@ export default function Tracker() {
                           <button
                             type="button"
                             disabled={busy === i.id}
+                            aria-busy={busy === i.id}
                             onClick={() => toggle(i)}
                             title={done ? 'Reopen' : 'Mark done'}
-                            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-label-sm text-label-sm transition-all hover:ring-1 disabled:opacity-60 ${
+                            className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 font-label-sm text-label-sm transition-all hover:ring-1 disabled:opacity-60 ${
                               done ? 'bg-tertiary-container/15 text-tertiary-fixed hover:ring-tertiary-fixed/50' : 'bg-primary-container/15 text-primary-fixed hover:ring-primary-container/50'
                             }`}
                           >
@@ -376,7 +449,7 @@ export default function Tracker() {
                 </tbody>
               </table>
             </div>
-            <div className="flex items-center justify-between bg-surface-container px-space-lg py-space-md font-body-sm text-body-sm text-on-surface-variant">
+            <div className="flex flex-wrap items-center justify-between gap-space-sm bg-surface-container px-space-lg py-space-md font-body-sm text-body-sm text-on-surface-variant">
               <span>
                 Showing {shown.length} of {filtered.length} {filtered.length === 1 ? 'commitment' : 'commitments'}
               </span>
@@ -404,19 +477,20 @@ export default function Tracker() {
               </div>
               <p className="font-body-md text-body-md text-on-surface-variant">Voice-approved and in-app actions executed across connected tools</p>
             </div>
-            <div className="relative">
+            <div className="relative" ref={menuRef}>
               <button
                 type="button"
                 aria-haspopup="listbox"
                 aria-expanded={menuOpen}
                 onClick={() => setMenuOpen((o) => !o)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-surface-container-low px-3 py-1.5 font-label-md text-label-md text-on-surface shadow-sm transition-colors hover:bg-surface-container border border-hairline"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-hairline bg-surface-container-low px-3 py-1.5 font-label-md text-label-md text-on-surface shadow-sm transition-colors hover:border-hairline-strong hover:bg-surface-container"
               >
                 <Icon name="filter_list" className="text-[18px] text-on-surface-variant" />
                 <span>{connector}</span>
+                <Icon name={menuOpen ? 'expand_less' : 'expand_more'} className="text-[18px] text-on-surface-variant" />
               </button>
               {menuOpen && (
-                <div role="listbox" className="absolute right-0 z-30 mt-1 w-48 overflow-hidden rounded-xl bg-surface-container-high shadow-popover">
+                <div role="listbox" className="animate-pop absolute right-0 z-30 mt-1 w-48 overflow-hidden rounded-xl border border-hairline bg-surface-container-high shadow-popover">
                   {CONNECTOR_OPTIONS.map((c) => (
                     <button
                       key={c}
@@ -438,8 +512,28 @@ export default function Tracker() {
             </div>
           </div>
           <div className="rounded-xl bg-surface-container-low p-space-lg shadow-sm lg:p-space-xl border border-hairline">
-            {acts.length === 0 ? (
-              <EmptyState icon="history" title={activity.data ? 'No actions yet for this connector' : 'Loading…'} />
+            {!activity.data ? (
+              activity.error ? (
+                <ErrorState title="Couldn't load the activity log" message={activity.error} onRetry={activity.reload} />
+              ) : (
+                <div role="status" aria-label="Loading activity" className="flex flex-col gap-space-md">
+                  {Array.from({ length: 4 }, (_, n) => (
+                    <div key={n} className="flex items-center gap-space-md">
+                      <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
+                      <div className="flex flex-1 flex-col gap-2 rounded-xl bg-surface-container p-space-md">
+                        <Skeleton className="h-4 w-1/3" />
+                        <Skeleton className="h-3 w-1/2" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : acts.length === 0 ? (
+              <EmptyState
+                icon="history"
+                title={connector === 'All Connectors' ? 'No actions yet' : `No ${connector} actions yet`}
+                body={connector === 'All Connectors' ? 'Actions you approve in the app or by voice appear here.' : 'Pick another connector to see more.'}
+              />
             ) : (
               <div className="relative space-y-space-xl pl-6 before:absolute before:bottom-3 before:left-3 before:top-3 before:w-[2px] before:bg-surface-container-high sm:pl-8 sm:before:left-4">
                 {acts.map((a) => {
@@ -464,16 +558,20 @@ export default function Tracker() {
                       <div className={`flex flex-col justify-between gap-space-sm rounded-xl p-space-md transition-colors lg:flex-row lg:items-center ${failed ? 'bg-error-container/10 hover:bg-error-container/20' : 'bg-surface-container hover:bg-surface-container-high/60'}`}>
                         <div className="flex min-w-0 flex-col gap-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className={`font-headline-sm text-headline-sm font-semibold ${failed ? 'text-error' : 'text-on-surface'}`}>{d.title}</span>
+                            <span className={`min-w-0 break-words font-headline-sm text-headline-sm font-semibold ${failed ? 'text-error' : 'text-on-surface'}`}>{d.title}</span>
                             <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-caption text-caption ${a.status === 'confirmed' && !web ? 'bg-primary-container/20 text-primary-fixed-dim' : 'bg-surface-container-highest text-on-surface-variant'}`}>
                               <Icon name={badge.icon} className="text-[12px]" />
                               {badge.text}
                             </span>
                           </div>
-                          {d.detail && <p className="line-clamp-2 font-body-md text-body-md text-on-surface-variant">{d.detail}</p>}
+                          {d.detail && (
+                            <p className="line-clamp-2 break-words font-body-md text-body-md text-on-surface-variant" title={d.detail}>
+                              {d.detail}
+                            </p>
+                          )}
                         </div>
                         <div className="flex shrink-0 items-center justify-between gap-space-md lg:justify-end">
-                          <span className="font-body-sm text-body-sm text-on-surface-variant">{relativeDateTime(a.created_at)}</span>
+                          <span className="whitespace-nowrap font-body-sm text-body-sm text-on-surface-variant">{relativeDateTime(a.created_at)}</span>
                           <span
                             className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-label-sm text-label-sm ${
                               failed ? 'bg-error-container/30 font-semibold text-error' : a.status === 'cancelled' ? 'bg-surface-container-highest text-on-surface-variant' : 'bg-tertiary-container/15 text-tertiary'
@@ -496,17 +594,41 @@ export default function Tracker() {
   );
 }
 
-function Kpi({ label, value, icon, tone, iconTone, iconBg = 'bg-surface-container', title }: { label: string; value: number; icon: string; tone: string; iconTone: string; iconBg?: string; title?: string }) {
+/** A tracker number; clicking it filters the list below. */
+function Kpi({
+  label,
+  value,
+  icon,
+  tone,
+  iconTone,
+  iconBg = 'bg-surface-container',
+  title,
+  onClick,
+}: {
+  label: string;
+  value: number | null;
+  icon: string;
+  tone: string;
+  iconTone: string;
+  iconBg?: string;
+  title?: string;
+  onClick: () => void;
+}) {
   return (
-    <div className="flex items-center justify-between rounded-xl bg-surface-container-low p-space-md shadow-sm border border-hairline" title={title}>
-      <div className="flex flex-col">
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className="tatva-card group flex items-center justify-between rounded-xl border border-hairline bg-surface-container-low p-space-md text-left shadow-sm hover:border-hairline-strong hover:bg-surface-container"
+    >
+      <span className="flex flex-col">
         <span className="font-caption text-caption uppercase tracking-wider text-on-surface-variant">{label}</span>
-        <span className={`mt-1 font-mono text-headline-md font-medium ${tone}`}>{String(value).padStart(2, '0')}</span>
-      </div>
-      <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${iconBg} ${iconTone}`}>
+        {value === null ? <Skeleton className="mt-2 h-6 w-10" /> : <span className={`mt-1 font-heading text-headline-md font-semibold tabular-nums ${tone}`}>{value}</span>}
+      </span>
+      <span className={`flex h-10 w-10 items-center justify-center rounded-lg transition-transform group-hover:scale-105 ${iconBg} ${iconTone}`}>
         <Icon name={icon} className="text-headline-sm" />
-      </div>
-    </div>
+      </span>
+    </button>
   );
 }
 
@@ -514,8 +636,10 @@ function TabButton({ active, onClick, icon, label, count }: { active: boolean; o
   return (
     <button
       type="button"
+      role="tab"
+      aria-selected={active}
       onClick={onClick}
-      className={`group flex items-center gap-space-sm border-b-2 pb-space-sm font-label-md text-label-md transition-colors ${
+      className={`group flex shrink-0 items-center gap-space-sm whitespace-nowrap rounded-t-md border-b-2 pb-space-sm font-label-md text-label-md transition-colors ${
         active ? 'border-primary-container text-primary-container' : 'border-transparent text-on-surface-variant hover:border-surface-variant hover:text-on-surface'
       }`}
     >

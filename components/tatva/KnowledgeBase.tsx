@@ -6,7 +6,7 @@ import { useApi } from '@/hooks/use-api';
 import { api, durationLabel, plural, relativeDateTime, uploadTarget } from '@/lib/tatva';
 import type { DashboardData, DocumentRow, MeetingRow, SearchResult } from './types';
 import { AttachmentPreview, AttachmentThumb, openAttachment, StatusPill, type Attachment } from './Attachments';
-import { EmptyState, Icon, Spinner, useTatvaUi } from './ui';
+import { EmptyState, ErrorState, Icon, Skeleton, Spinner, useTatvaUi } from './ui';
 
 type Tab = 'all' | 'meetings' | 'documents' | 'attachments';
 
@@ -152,7 +152,7 @@ export default function KnowledgeBase() {
   const loading = (!meetings.data && !meetings.error) || (!docs.data && !docs.error);
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-space-xl p-space-xl">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-space-xl px-space-md py-space-xl sm:px-space-xl">
       <div className="flex flex-col justify-between gap-space-md md:flex-row md:items-end">
         <div className="flex flex-col gap-space-xs">
           <div className="flex items-center gap-space-xs font-caption text-caption uppercase tracking-widest text-on-surface-variant">
@@ -167,8 +167,9 @@ export default function KnowledgeBase() {
           <button
             type="button"
             disabled={uploading}
+            aria-busy={uploading}
             onClick={() => fileRef.current?.click()}
-            className="group flex items-center gap-space-sm rounded-[10px] bg-primary-container px-space-lg py-space-sm font-label-md text-label-md text-on-primary transition-all duration-150 active:scale-[0.98] disabled:opacity-60"
+            className="group flex items-center gap-space-sm whitespace-nowrap rounded-[10px] bg-primary-container px-space-lg py-space-sm font-label-md text-label-md text-on-primary transition-all duration-150 hover:bg-primary-fixed disabled:opacity-60"
           >
             {uploading ? <Spinner className="text-headline-sm" /> : <Icon name="upload_file" className="text-headline-sm transition-transform group-hover:-translate-y-0.5" />}
             <span>{uploading ? 'Uploading…' : 'Upload document'}</span>
@@ -178,7 +179,8 @@ export default function KnowledgeBase() {
 
       <div className="flex flex-col gap-space-md">
         <form
-          className="relative w-full rounded-xl bg-surface-container-low shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] transition-all duration-200 border border-hairline"
+          role="search"
+          className="relative w-full rounded-xl border border-hairline bg-surface-container-low shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] transition-all duration-200 focus-within:border-primary-container/50 focus-within:ring-1 focus-within:ring-primary-container/40 hover:border-hairline-strong"
           onSubmit={(e) => {
             e.preventDefault();
             void search(query);
@@ -194,7 +196,8 @@ export default function KnowledgeBase() {
                 if (!e.target.value) void search('');
               }}
               className="w-full bg-transparent font-body-lg text-body-lg text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none"
-              placeholder="Ask or search across all meetings and documents..."
+              placeholder="Ask or search across all meetings and documents…"
+              aria-label="Search meetings and documents"
               type="text"
             />
             {searched ? (
@@ -210,18 +213,20 @@ export default function KnowledgeBase() {
                 <Icon name="close" className="text-headline-sm" />
               </button>
             ) : (
-              <span className="hidden rounded bg-surface-container-high px-1.5 py-0.5 font-caption text-caption text-on-surface-variant sm:inline-flex">Ctrl K</span>
+              <kbd className="hidden shrink-0 whitespace-nowrap rounded border border-hairline bg-surface-container-high px-1.5 py-0.5 font-mono text-[11px] text-on-surface-variant sm:inline-flex">Ctrl K</kbd>
             )}
           </div>
         </form>
         <div className="flex flex-wrap items-center justify-between gap-space-sm">
-          <div className="flex items-center gap-space-xs rounded-xl bg-surface-container-lowest p-1 border border-hairline">
+          <div role="tablist" aria-label="Knowledge types" className="flex max-w-full items-center gap-space-xs overflow-x-auto rounded-xl border border-hairline bg-surface-container-lowest p-1">
             {tabs.map((t) => (
               <button
                 key={t.id}
                 type="button"
+                role="tab"
+                aria-selected={tab === t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-space-xs rounded-lg px-space-md py-1.5 font-label-md text-label-md transition-colors ${
+                className={`flex shrink-0 items-center gap-space-xs whitespace-nowrap rounded-lg px-space-md py-1.5 font-label-md text-label-md transition-colors ${
                   tab === t.id ? 'bg-surface-container text-primary-container shadow-sm' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface'
                 }`}
               >
@@ -256,15 +261,15 @@ export default function KnowledgeBase() {
               <div className="flex items-center justify-between gap-space-sm">
                 <div className="flex min-w-0 items-center gap-space-xs">
                   <Icon name={r.kind === 'document' ? 'description' : r.kind === 'attachment' ? 'attach_file' : 'graphic_eq'} className="text-headline-sm text-on-surface-variant" />
-                  <span className="truncate font-label-md text-label-md text-on-surface">{r.title}</span>
+                  <span className="truncate font-label-md text-label-md text-on-surface" title={r.title}>{r.title}</span>
                   {r.kind === 'attachment' && <span className="hidden truncate text-caption text-on-surface-variant sm:inline">shared in {r.meeting_title}</span>}
                   <span className="shrink-0 rounded bg-surface-container-highest px-2 py-0.5 font-caption text-caption text-on-surface-variant">
                     {r.kind === 'document' ? `Page ${r.page ?? '?'}` : r.kind === 'attachment' ? (r.page ? `Attachment · p.${r.page}` : 'Attachment') : r.source_type.replace('_', ' ')}
                   </span>
                 </div>
-                <span className="shrink-0 font-mono font-caption text-caption text-tertiary-fixed">{Math.round(r.similarity * 100)}% match</span>
+                <span className="shrink-0 whitespace-nowrap font-caption text-caption tabular-nums text-tertiary-fixed">{Math.round(r.similarity * 100)}% match</span>
               </div>
-              <p className="font-body-sm text-body-sm text-on-surface-variant">{r.content}</p>
+              <p className="line-clamp-4 break-words font-body-sm text-body-sm text-on-surface-variant">{r.content}</p>
               <div className="flex justify-end">
                 {r.kind === 'attachment' ? (
                   <div className="flex items-center gap-space-md">
@@ -288,16 +293,31 @@ export default function KnowledgeBase() {
             </div>
           ))}
         </div>
+      ) : meetings.error && docs.error && !meetings.data && !docs.data ? (
+        <div className="rounded-xl border border-hairline bg-surface-container-low">
+          <ErrorState title="Couldn't load the knowledge base" message={meetings.error} onRetry={() => Promise.all([meetings.reload(), docs.reload()])} />
+        </div>
       ) : loading ? (
-        <div className="flex justify-center p-space-2xl text-on-surface-variant">
-          <Spinner className="text-headline-lg" />
+        <div role="status" aria-label="Loading" className="grid grid-cols-1 gap-space-lg md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }, (_, n) => (
+            <div key={n} className="flex flex-col gap-space-sm overflow-hidden rounded-xl border border-hairline bg-surface-container-low p-space-md">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-5 w-3/4" />
+              <Skeleton className="h-3.5 w-1/3" />
+              <Skeleton className="h-14 w-full rounded-lg" />
+              <div className="flex justify-between">
+                <Skeleton className="h-5 w-24" />
+                <Skeleton className="h-5 w-20" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-space-lg md:grid-cols-2 lg:grid-cols-3">
           {(tab === 'all' || tab === 'meetings') &&
             meetingList.map((m) => (
-              <div key={m.id} className="group relative flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-low shadow-md transition-all duration-200 hover:bg-surface-container border border-hairline">
-                <Link href={`/meetings/${m.id}`} className="flex flex-col">
+              <div key={m.id} className="group relative flex flex-col justify-between overflow-hidden rounded-xl border border-hairline bg-surface-container-low shadow-md transition-all duration-200 hover:border-hairline-strong hover:bg-surface-container">
+                <Link href={`/meetings/${m.id}`} className="flex flex-col rounded-t-xl hover:opacity-100">
                   <div className="flex items-center justify-between bg-surface-container-lowest px-space-md py-space-sm">
                     <div className="flex items-center gap-space-xs">
                       <Icon name="graphic_eq" className="text-headline-sm text-on-surface-variant" />
@@ -309,7 +329,9 @@ export default function KnowledgeBase() {
                   </div>
                   <div className="flex flex-col gap-space-sm p-space-md">
                     <div className="flex flex-col gap-1">
-                      <h2 className="truncate font-headline-sm text-headline-sm font-bold text-on-surface transition-colors group-hover:text-primary-container">{m.title}</h2>
+                      <h2 className="truncate font-headline-sm text-headline-sm font-bold text-on-surface transition-colors group-hover:text-primary-container" title={m.title}>
+                        {m.title}
+                      </h2>
                       <div className="flex items-center gap-1.5 font-body-sm text-body-sm text-on-surface-variant">
                         <Icon name="calendar_today" className="text-body-sm" />
                         <span>{relativeDateTime(m.recorded_at)}</span>
@@ -345,7 +367,7 @@ export default function KnowledgeBase() {
             ))}
           {(tab === 'all' || tab === 'documents') &&
             docList.map((d) => (
-              <div key={d.id} className="group relative flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-low shadow-md transition-all duration-200 hover:bg-surface-container border border-hairline">
+              <div key={d.id} className="group relative flex flex-col justify-between overflow-hidden rounded-xl border border-hairline bg-surface-container-low shadow-md transition-all duration-200 hover:border-hairline-strong hover:bg-surface-container">
                 <div className="flex flex-col">
                   <div className="flex items-center justify-between bg-surface-container-lowest px-space-md py-space-sm">
                     <div className="flex items-center gap-space-xs">
@@ -399,10 +421,10 @@ export default function KnowledgeBase() {
                     <span className="rounded bg-surface-container-highest px-2 py-0.5 font-caption text-caption text-on-surface">{sizeLabel(d.bytes)}</span>
                   </div>
                   <div className="flex items-center gap-space-xs">
-                    <button type="button" title="Preview" aria-label={`Preview ${d.name}`} onClick={() => openDocument(d.id, false).catch((e) => toast(e.message, 'error'))} className="rounded p-1 text-on-surface-variant transition-colors hover:text-primary-container">
+                    <button type="button" title="Preview" aria-label={`Preview ${d.name}`} onClick={() => openDocument(d.id, false).catch((e) => toast(e.message, 'error'))} className="rounded-md p-1 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary-container">
                       <Icon name="visibility" className="text-headline-sm" />
                     </button>
-                    <button type="button" title="Download" aria-label={`Download ${d.name}`} onClick={() => openDocument(d.id, true).catch((e) => toast(e.message, 'error'))} className="rounded p-1 text-on-surface-variant transition-colors hover:text-primary-container">
+                    <button type="button" title="Download" aria-label={`Download ${d.name}`} onClick={() => openDocument(d.id, true).catch((e) => toast(e.message, 'error'))} className="rounded-md p-1 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary-container">
                       <Icon name="download" className="text-headline-sm" />
                     </button>
                   </div>
@@ -411,8 +433,8 @@ export default function KnowledgeBase() {
             ))}
           {(tab === 'all' || tab === 'attachments') &&
             fileList.map((a) => (
-              <div key={a.id} className="group relative flex flex-col overflow-hidden rounded-xl border border-hairline bg-surface-container-low shadow-md transition-all duration-200 hover:bg-surface-container">
-                <button type="button" onClick={() => setPreview(a.id)} aria-label={`Preview ${a.name}`} className="relative block aspect-[16/9] w-full overflow-hidden border-b border-hairline bg-surface-container-lowest">
+              <div key={a.id} className="group relative flex flex-col overflow-hidden rounded-xl border border-hairline bg-surface-container-low shadow-md transition-all duration-200 hover:border-hairline-strong hover:bg-surface-container">
+                <button type="button" onClick={() => setPreview(a.id)} aria-label={`Preview ${a.name}`} className="relative block aspect-[16/9] w-full overflow-hidden rounded-t-xl border-b border-hairline bg-surface-container-lowest hover:brightness-110">
                   <AttachmentThumb a={a} className="transition-transform duration-300 group-hover:scale-[1.02]" />
                   <span className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-caption text-on-surface backdrop-blur">
                     <Icon name="attach_file" className="text-[12px]" /> Attachment
@@ -426,7 +448,7 @@ export default function KnowledgeBase() {
                     <h2 className="truncate text-headline-sm text-on-surface" title={a.name}>
                       {a.name}
                     </h2>
-                    <Link href={`/meetings/${a.meeting_id}`} className="flex items-center gap-1.5 truncate text-body-sm text-on-surface-variant hover:text-on-surface">
+                    <Link href={`/meetings/${a.meeting_id}`} title={`Shared in ${a.meeting_title}`} className="flex w-fit max-w-full items-center gap-1.5 truncate rounded text-body-sm text-on-surface-variant hover:text-on-surface">
                       <Icon name="graphic_eq" className="text-body-sm" />
                       <span className="truncate">Shared in {a.meeting_title}</span>
                     </Link>
@@ -436,14 +458,14 @@ export default function KnowledgeBase() {
                   </p>
                   <div className="mt-auto flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <span className="rounded bg-surface-container-highest px-2 py-0.5 font-mono text-caption text-on-surface">{sizeLabel(a.bytes)}</span>
+                      <span className="rounded bg-surface-container-highest px-2 py-0.5 text-caption tabular-nums text-on-surface">{sizeLabel(a.bytes)}</span>
                       <span className="rounded bg-surface-container-highest px-2 py-0.5 text-caption capitalize text-on-surface">{a.kind === 'pdf' ? 'PDF' : (a.label ?? 'image')}</span>
                     </div>
                     <div className="flex items-center gap-space-xs">
-                      <button type="button" title="Preview" aria-label={`Preview ${a.name}`} onClick={() => setPreview(a.id)} className="rounded p-1 text-on-surface-variant transition-colors hover:text-on-surface">
+                      <button type="button" title="Preview" aria-label={`Preview ${a.name}`} onClick={() => setPreview(a.id)} className="rounded-md p-1 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface">
                         <Icon name="visibility" className="text-headline-sm" />
                       </button>
-                      <button type="button" title="Download" aria-label={`Download ${a.name}`} onClick={() => openAttachment(a.id, true).catch((e) => toast(e.message, 'error'))} className="rounded p-1 text-on-surface-variant transition-colors hover:text-on-surface">
+                      <button type="button" title="Download" aria-label={`Download ${a.name}`} onClick={() => openAttachment(a.id, true).catch((e) => toast(e.message, 'error'))} className="rounded-md p-1 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface">
                         <Icon name="download" className="text-headline-sm" />
                       </button>
                     </div>
@@ -475,8 +497,8 @@ export default function KnowledgeBase() {
       {preview && <AttachmentPreview id={preview} onClose={() => setPreview(null)} />}
 
       <div className="flex items-center justify-center pb-space-2xl pt-space-lg">
-        <div className="flex items-center gap-space-xs rounded-full bg-surface-container-low px-space-md py-space-sm font-body-sm text-body-sm text-on-surface-variant shadow-sm">
-          <Icon name="lightbulb" className="animate-pulse text-body-md text-on-surface-variant" />
+        <div className="flex items-center gap-space-xs rounded-full bg-surface-container-low px-space-md py-space-sm text-center font-body-sm text-body-sm text-on-surface-variant shadow-sm">
+          <Icon name="lightbulb" className="text-body-md text-on-surface-variant" />
           <span>Tip: record a meeting with the Tatva extension and it appears here automatically.</span>
         </div>
       </div>

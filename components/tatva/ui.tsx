@@ -38,6 +38,73 @@ export function EmptyState({ icon, title, body }: { icon: string; title: string;
   );
 }
 
+/** A shimmering placeholder block while data loads (sizes via className). */
+export function Skeleton({ className = '' }: { className?: string }) {
+  return <span aria-hidden="true" className={`skeleton block ${className}`} />;
+}
+
+/** Placeholder rows for a list (icon, two lines, trailing pill). */
+export function SkeletonRows({ rows = 3, className = '' }: { rows?: number; className?: string }) {
+  return (
+    <div role="status" aria-label="Loading" className={`divide-y divide-surface-container-highest ${className}`}>
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="flex items-center gap-space-sm p-space-md">
+          <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
+          <div className="flex flex-1 flex-col gap-2">
+            <Skeleton className="h-3.5 w-2/5" />
+            <Skeleton className="h-3 w-1/4" />
+          </div>
+          <Skeleton className="h-6 w-16 rounded-full" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Friendly error with a Retry button (spinner while retrying). */
+export function ErrorState({ title = "Couldn't load this", message, onRetry, compact = false }: { title?: string; message?: string | null; onRetry?: () => unknown; compact?: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const retry = async () => {
+    if (!onRetry || busy) return;
+    setBusy(true);
+    try {
+      await onRetry();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div role="alert" className={`flex flex-col items-center justify-center gap-space-sm text-center ${compact ? 'p-space-md' : 'px-space-md py-space-xl'}`}>
+      <Icon name="cloud_off" className={`${compact ? 'text-headline-sm' : 'text-headline-lg'} text-on-surface-variant`} />
+      <p className="text-label-md text-on-surface">{title}</p>
+      <p className="max-w-sm text-body-sm text-on-surface-variant">
+        {friendlyError(message)}
+      </p>
+      {onRetry && (
+        <button
+          type="button"
+          onClick={retry}
+          disabled={busy}
+          aria-busy={busy}
+          className="mt-1 inline-flex items-center gap-2 rounded-lg border border-hairline bg-surface-container-high px-space-md py-1.5 text-label-md text-on-surface hover:border-hairline-strong hover:bg-surface-bright"
+        >
+          {busy ? <Spinner className="text-body-md" /> : <Icon name="refresh" className="text-body-md" />}
+          {busy ? 'Retrying…' : 'Retry'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Turns transport errors into something a person can act on. */
+export function friendlyError(message?: string | null): string {
+  if (!message) return 'Something went wrong. Please try again.';
+  if (/failed to fetch|networkerror|load failed|ECONNREFUSED|502|503|504|bad gateway|timed? ?out/i.test(message))
+    return "Tatva's server didn't answer. It may be waking up; try again in a few seconds.";
+  if (/sign in first|401/i.test(message)) return 'Your session has ended. Reload the page to sign in again.';
+  return message;
+}
+
 // ------------------------------------------------------------------- context
 
 type Tone = 'success' | 'error' | 'info';
@@ -140,13 +207,15 @@ export function DialogFrame({ title, icon, onClose, children }: { title: string;
   }, [onClose]);
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-space-md backdrop-blur-md" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-label={title} className="flex w-full max-w-lg flex-col gap-space-lg rounded-2xl bg-surface-container-low p-space-xl shadow-2xl border border-hairline">
+      <div role="dialog" aria-modal="true" aria-label={title} className="animate-pop flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col gap-space-lg overflow-y-auto rounded-2xl border border-hairline bg-surface-container-low p-space-lg shadow-2xl sm:p-space-xl">
         <div className="flex items-start justify-between gap-space-md">
-          <div className="flex items-center gap-space-sm">
-            {icon && <Icon name={icon} className="text-headline-sm text-on-surface-variant" />}
-            <h2 className="font-headline-md text-headline-md text-on-surface">{title}</h2>
+          <div className="flex min-w-0 items-center gap-space-sm">
+            {icon && <Icon name={icon} className="shrink-0 text-headline-sm text-on-surface-variant" />}
+            <h2 className="truncate font-headline-md text-headline-md text-on-surface" title={title}>
+              {title}
+            </h2>
           </div>
-          <button type="button" aria-label="Close dialog" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-container-high text-on-surface-variant transition-colors hover:bg-surface-bright hover:text-on-surface">
+          <button type="button" aria-label="Close dialog" onClick={onClose} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-container-high text-on-surface-variant transition-colors hover:bg-surface-bright hover:text-on-surface">
             <Icon name="close" className="text-headline-sm" />
           </button>
         </div>
@@ -224,8 +293,9 @@ function ActionDialog({ request, onClose, toast }: { request: ActionRequest; onC
         <button
           type="button"
           disabled={!summary || busy}
+          aria-busy={busy}
           onClick={confirm}
-          className="inline-flex items-center gap-2 rounded-xl bg-primary-container px-space-xl py-2.5 font-label-md text-label-md font-bold text-on-primary transition-all hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-xl bg-primary-container px-space-xl py-2.5 font-label-md text-label-md font-bold text-on-primary transition-all hover:bg-primary-fixed active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy && <Spinner className="text-body-md" />}
           {request.confirmLabel ?? 'Confirm'}
@@ -259,9 +329,10 @@ function PlainDialog({ request, onClose, toast }: { request: ConfirmRequest; onC
         <button
           type="button"
           disabled={busy}
+          aria-busy={busy}
           onClick={run}
           className={`inline-flex items-center gap-2 rounded-xl px-space-xl py-2.5 font-label-md text-label-md font-bold transition-all active:scale-[0.98] disabled:opacity-50 ${
-            request.tone === 'danger' ? 'bg-error-container text-on-error-container hover:bg-error hover:text-on-error' : 'bg-primary-container text-on-primary hover:brightness-105'
+            request.tone === 'danger' ? 'bg-error-container text-on-error-container hover:bg-error hover:text-on-error' : 'bg-primary-container text-on-primary hover:bg-primary-fixed'
           }`}
         >
           {busy && <Spinner className="text-body-md" />}

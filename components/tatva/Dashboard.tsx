@@ -7,7 +7,7 @@ import { useApi } from '@/hooks/use-api';
 import { api, durationLabel, dueLabel, initials, minutesLabel, plural, relativeDateTime, todayYmd } from '@/lib/tatva';
 import { PROCESSING, TOOL_LABELS, type CalendarEvent, type DashboardData, type MeetingRow, type PendingItem } from './types';
 import { firstName, ownerIsMe, useProfile } from './profile';
-import { EmptyState, Icon, Spinner, useTatvaUi } from './ui';
+import { EmptyState, ErrorState, Icon, Skeleton, SkeletonRows, Spinner, useTatvaUi } from './ui';
 
 const STEP_LABEL: Record<string, string> = {
   uploaded: 'Uploaded',
@@ -62,7 +62,7 @@ export function StatusPill({ meeting }: { meeting: MeetingRow }) {
   );
 }
 
-export function MeetingListRow({ meeting, onAsk }: { meeting: MeetingRow; onAsk: (m: MeetingRow) => void }) {
+export function MeetingListRow({ meeting, onAsk, showSaved = false }: { meeting: MeetingRow; onAsk: (m: MeetingRow) => void; showSaved?: boolean }) {
   const processing = PROCESSING.includes(meeting.status);
   const body = (
     <div className="flex min-w-0 items-start gap-space-sm">
@@ -75,7 +75,7 @@ export function MeetingListRow({ meeting, onAsk }: { meeting: MeetingRow; onAsk:
       </div>
       <div className="flex min-w-0 flex-col">
         <div className="flex items-center gap-2">
-          <span className="truncate font-label-md text-label-md font-semibold text-on-surface">{meeting.title}</span>
+          <span className="truncate font-label-md text-label-md font-semibold text-on-surface group-hover:text-primary-fixed" title={meeting.title}>{meeting.title}</span>
           {processing ? (
             <span className="rounded bg-surface-container-high px-2 py-0.5 font-caption text-caption text-primary-container">Live Sync</span>
           ) : (
@@ -96,10 +96,16 @@ export function MeetingListRow({ meeting, onAsk }: { meeting: MeetingRow; onAsk:
           {processing ? (
             <span className="truncate">{STEP_LABEL[meeting.status]}</span>
           ) : meeting.status === 'failed' ? (
-            <span className="truncate text-error">{meeting.error ?? 'Processing failed'}</span>
+            <span className="truncate text-error" title={meeting.error ?? undefined}>{meeting.error ?? 'Processing failed'}</span>
           ) : (
             <span className={meeting.action_count ? 'font-medium text-tertiary-fixed' : ''}>{plural(meeting.action_count, 'action')}</span>
           )}
+          {showSaved && meeting.time_saved_minutes ? (
+            <>
+              <span>•</span>
+              <span className="whitespace-nowrap text-primary-container">~{minutesLabel(meeting.time_saved_minutes)} saved</span>
+            </>
+          ) : null}
         </div>
       </div>
     </div>
@@ -107,7 +113,7 @@ export function MeetingListRow({ meeting, onAsk }: { meeting: MeetingRow; onAsk:
   return (
     <div className={`group flex flex-col justify-between gap-space-sm p-space-md transition-colors hover:bg-surface-container sm:flex-row sm:items-center ${processing ? 'bg-surface-container/60' : ''}`}>
       {meeting.status === 'ready' ? (
-        <Link href={`/meetings/${meeting.id}`} className="min-w-0 flex-1">
+        <Link href={`/meetings/${meeting.id}`} data-hover="parent" className="min-w-0 flex-1 rounded-lg">
           {body}
         </Link>
       ) : (
@@ -118,7 +124,7 @@ export function MeetingListRow({ meeting, onAsk }: { meeting: MeetingRow; onAsk:
           <button
             type="button"
             onClick={() => onAsk(meeting)}
-            className="hidden items-center gap-1.5 rounded-lg bg-surface-container-high px-3 py-1 font-label-md text-caption text-on-surface opacity-0 transition-all hover:bg-surface-bright focus:opacity-100 group-hover:opacity-100 sm:inline-flex"
+            className="hidden items-center gap-1.5 rounded-lg bg-surface-container-high px-3 py-1 font-label-md text-caption text-on-surface opacity-0 transition-all hover:bg-surface-bright focus-visible:opacity-100 group-hover:opacity-100 sm:inline-flex"
           >
             <Icon name="graphic_eq" className="text-sm text-on-surface-variant" />
             <span>Ask Tatva</span>
@@ -184,7 +190,7 @@ export default function Dashboard() {
   const today = todayYmd();
 
   return (
-    <div className="mx-auto max-w-7xl px-margin py-space-xl">
+    <div className="mx-auto max-w-7xl py-space-xl sm:px-margin">
       <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-space-xl px-space-md py-space-md sm:px-space-xl">
         <header className="flex flex-col justify-between gap-space-lg md:flex-row md:items-end">
           <div className="flex flex-col gap-space-xs">
@@ -194,7 +200,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-space-sm self-start md:self-auto">
             <Link
               href="/talk"
-              className="group relative inline-flex items-center gap-space-sm rounded-xl bg-primary-container px-5 py-2.5 font-label-md text-label-md text-on-primary shadow-lg shadow-primary-container/20 transition-all hover:brightness-105 active:scale-[0.99]"
+              className="group relative inline-flex items-center gap-space-sm rounded-xl bg-primary-container px-5 py-2.5 font-label-md text-label-md text-on-primary shadow-lg shadow-primary-container/20 transition-all hover:bg-primary-fixed active:scale-[0.99]"
             >
               <Icon name="mic" className="text-headline-sm transition-transform group-hover:scale-110" />
               <span>Talk to Tatva</span>
@@ -203,44 +209,54 @@ export default function Dashboard() {
         </header>
 
         {error && !data && (
-          <div className="flex items-center gap-space-sm rounded-xl bg-error-container/20 p-space-md text-error">
-            <Icon name="error" />
-            <span className="font-body-md text-body-md">{error}</span>
+          <div className="rounded-xl border border-hairline bg-surface-container-low">
+            <ErrorState title="Couldn't load your dashboard" message={error} onRetry={reload} />
           </div>
         )}
 
         <section className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Meetings Recorded" icon="graphic_eq" value={s ? String(s.meetings_recorded) : '–'} caption={s ? `${s.meetings_this_week} this week` : ''} />
           <StatCard
+            href="/meetings"
+            hint="See all meetings"
+            label="Meetings Recorded"
+            icon="graphic_eq"
+            value={s ? String(s.meetings_recorded) : null}
+            caption={s ? `${s.meetings_this_week} this week` : ''}
+          />
+          <StatCard
+            href="/tracker?filter=pending"
+            hint="See pending items in the Tracker"
             label="Open Action Items"
             icon="pending_actions"
-            value={s ? String(s.open_action_items) : '–'}
+            value={s ? String(s.open_action_items) : null}
             caption={s ? `${s.due_this_week} due this week${s.overdue ? ` · ${s.overdue} overdue` : ''}` : ''}
           />
-          <StatCard label="Actions by Tatva" icon="bolt" value={s ? String(s.actions_by_tatva_this_week) : '–'} caption={s ? (tools ? `This week: ${tools}` : 'None yet this week') : ''}>
+          <StatCard
+            href="/tracker?view=activity"
+            hint="See every action in the activity log"
+            label="Actions by Tatva"
+            icon="bolt"
+            value={s ? String(s.actions_by_tatva_this_week) : null}
+            caption={s ? (tools ? `This week: ${tools}` : 'None yet this week') : ''}
+          >
             <div className="flex items-center gap-1.5 text-[11px] text-tertiary">
               <span className="h-1.5 w-1.5 rounded-full bg-tertiary" />
               <span>Each one confirmed by you first</span>
             </div>
           </StatCard>
-          <div className="group relative flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-lowest p-5 shadow-xl border border-hairline">
-            <div className="pointer-events-none absolute -bottom-4 -right-4 h-28 w-28 rounded-full bg-primary-container/10 blur-2xl" />
-            <div className="relative z-10 flex items-center justify-between">
-              <span className="flex items-center gap-1.5 font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">
-                <span className="h-2 w-2 rounded-full bg-primary-container" />
-                Time Saved This Week
-              </span>
-              <Icon name="timer" className="text-body-lg text-on-surface-variant" />
-            </div>
-            <div className="relative z-10 my-3">
-              <span className="font-mono text-headline-xl font-medium tracking-tight text-primary-container">{s ? minutesLabel(s.time_saved_this_week_minutes) : '–'}</span>
-            </div>
-            <p className="relative z-10 font-caption text-caption text-secondary">
-              {s
+          <StatCard
+            href="/meetings?sort=time_saved"
+            hint="See which meetings saved the most time"
+            label="Time Saved This Week"
+            icon="timer"
+            accent
+            value={s ? minutesLabel(s.time_saved_this_week_minutes) : null}
+            caption={
+              s
                 ? `Notes, items and follow-ups for ${plural(s.meetings_this_week, 'meeting')}${s.time_saved_other_actions_minutes ? ` + ${s.time_saved_other_actions_minutes} min of other actions` : ''}`
-                : ''}
-            </p>
-          </div>
+                : ''
+            }
+          />
         </section>
 
         <div className="grid grid-cols-1 items-start gap-space-lg lg:grid-cols-12">
@@ -250,16 +266,14 @@ export default function Dashboard() {
                 <h2 className="font-headline-sm text-headline-sm font-bold text-on-surface">Recent meetings</h2>
                 <span className="rounded-full bg-surface-container px-2 py-0.5 font-caption text-caption font-semibold text-secondary">{readyMeetings} Total</span>
               </div>
-              <Link href="/meetings" className="flex items-center gap-1 font-label-md text-label-md text-primary-container hover:underline">
+              <Link href="/meetings" className="group flex items-center gap-1 rounded-md px-1 font-label-md text-label-md text-primary-container hover:text-primary-fixed hover:underline">
                 <span>View all</span>
-                <Icon name="arrow_forward" className="text-body-sm" />
+                <Icon name="arrow_forward" className="text-body-sm transition-transform group-hover:translate-x-0.5" />
               </Link>
             </div>
             <div className="divide-y divide-surface-container-highest overflow-hidden rounded-xl bg-surface-container-low shadow-md border border-hairline">
               {!data ? (
-                <div className="flex items-center justify-center p-space-xl text-on-surface-variant">
-                  <Spinner />
-                </div>
+                error ? <ErrorState compact message={error} onRetry={reload} /> : <SkeletonRows rows={3} />
               ) : data.meetings.length === 0 ? (
                 <EmptyState icon="mic_none" title="No meetings yet" body="Record a Google Meet or Teams call with the Tatva extension and it appears here." />
               ) : (
@@ -276,9 +290,14 @@ export default function Dashboard() {
               </div>
               <div className="relative flex flex-col gap-space-md overflow-hidden rounded-xl bg-surface-container-low p-5 shadow-md border border-hairline">
                 {next.loading && !next.data ? (
-                  <div className="flex items-center gap-2 text-on-surface-variant">
-                    <Spinner className="text-body-md" /> <span className="font-body-sm text-body-sm">Checking your calendar…</span>
+                  <div role="status" aria-label="Checking your calendar" className="flex flex-col gap-space-sm">
+                    <Skeleton className="h-5 w-32 rounded-full" />
+                    <Skeleton className="h-5 w-3/5" />
+                    <Skeleton className="h-3.5 w-4/5" />
+                    <Skeleton className="h-10 w-full rounded-lg" />
                   </div>
+                ) : next.error && !next.data ? (
+                  <ErrorState compact title="Couldn't read Google Calendar" message={next.error} onRetry={next.reload} />
                 ) : event ? (
                   <>
                     <div className="flex items-center justify-between">
@@ -296,7 +315,7 @@ export default function Dashboard() {
                       <span className="font-caption text-caption text-secondary">{untilLabel(event.start)}</span>
                     </div>
                     <div className="flex flex-col gap-1">
-                      <h3 className="font-headline-sm text-headline-sm font-bold tracking-tight text-on-surface">{event.title}</h3>
+                      <h3 className="truncate font-headline-sm text-headline-sm font-bold tracking-tight text-on-surface" title={event.title}>{event.title}</h3>
                       <div className="flex items-center gap-2 font-caption text-caption text-secondary">
                         <Icon name="schedule" className="text-sm" />
                         <span>{event.when}</span>
@@ -304,14 +323,14 @@ export default function Dashboard() {
                       {event.attendees.length > 0 && (
                         <div className="mt-1 flex items-center gap-2 font-caption text-caption text-secondary">
                           <Icon name="group" className="text-sm" />
-                          <span className="truncate">{event.attendees.join(', ')}</span>
+                          <span className="truncate" title={event.attendees.join(', ')}>{event.attendees.join(', ')}</span>
                         </div>
                       )}
                     </div>
                     <button
                       type="button"
                       onClick={() => router.push('/talk?brief=1')}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-surface-container-high px-4 py-2.5 font-label-md text-label-md text-on-surface shadow-sm transition-all hover:bg-surface-bright"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-hairline bg-surface-container-high px-4 py-2.5 font-label-md text-label-md text-on-surface shadow-sm transition-all hover:border-hairline-strong hover:bg-surface-bright"
                     >
                       <Icon name="auto_awesome" className="text-body-lg text-on-surface-variant" />
                       <span>Brief me</span>
@@ -319,7 +338,7 @@ export default function Dashboard() {
                   </>
                 ) : (
                   <p className="font-body-sm text-body-sm text-on-surface-variant">
-                    {next.error ? `Couldn't read Google Calendar: ${next.error}` : 'Nothing on your calendar in the next two weeks.'}
+                    Nothing on your calendar in the next two weeks.
                   </p>
                 )}
               </div>
@@ -336,6 +355,7 @@ export default function Dashboard() {
                 <span className="font-caption text-caption text-secondary">Auto-tracked</span>
               </div>
               <div className="divide-y divide-surface-container-highest overflow-hidden rounded-xl bg-surface-container-low shadow-md border border-hairline">
+                {!data && (error ? <ErrorState compact message={error} onRetry={reload} /> : <SkeletonRows rows={3} />)}
                 {data && data.pending.length === 0 && <EmptyState icon="task_alt" title="All caught up" body="No open action items." />}
                 {data?.pending.slice(0, 3).map((item) => {
                   const mine = ownerIsMe(item.owner, profile);
@@ -352,21 +372,23 @@ export default function Dashboard() {
                           {item.owner ? initials(item.owner) : '–'}
                         </div>
                         <div className="flex min-w-0 flex-col">
-                          <span className={`truncate font-label-md text-label-md text-on-surface ${mine ? 'font-semibold' : ''}`}>
+                          <span className={`truncate font-label-md text-label-md text-on-surface ${mine ? 'font-semibold' : ''}`} title={`${item.owner ? `${item.owner}: ` : ''}${item.task}`}>
                             {item.owner && !mine ? `${item.owner.split(' ')[0]}: ` : ''}
                             {item.task}
                           </span>
-                          <div className="mt-0.5 flex items-center gap-1.5">
+                          <div className="mt-1 flex min-w-0 items-center gap-1.5">
                             {due && (
                               <span
-                                className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                className={`shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-semibold leading-4 ${
                                   overdue ? 'bg-error-container/40 text-error' : mine ? 'bg-on-tertiary-fixed-variant text-tertiary' : 'bg-on-primary-fixed-variant/30 text-primary-fixed'
                                 }`}
                               >
                                 {overdue ? `Overdue · ${due}` : `Due ${due}`}
                               </span>
                             )}
-                            <span className="truncate font-caption text-caption text-secondary">{mine ? 'You (Owner)' : item.owner ? (item.meeting ?? 'Tracker') : 'Unassigned'}</span>
+                            <span className="min-w-0 truncate font-caption text-caption text-secondary" title={item.meeting ?? undefined}>
+                              {mine ? 'You (Owner)' : item.owner ? (item.meeting ?? 'Tracker') : 'Unassigned'}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -375,7 +397,8 @@ export default function Dashboard() {
                           type="button"
                           title="Mark Complete"
                           aria-label={`Mark "${item.task}" complete`}
-                          disabled={completing === item.id}
+                          disabled={completing !== null}
+                          aria-busy={completing === item.id}
                           onClick={() => complete(item)}
                           className="shrink-0 rounded-lg p-1.5 text-primary-container transition-colors hover:bg-surface-container-high disabled:opacity-50"
                         >
@@ -396,7 +419,7 @@ export default function Dashboard() {
                   );
                 })}
               </div>
-              <Link href="/tracker" className="group flex items-center justify-between px-1 py-1 font-label-md text-label-md text-secondary transition-colors hover:text-on-surface">
+              <Link href="/tracker" className="group flex items-center justify-between rounded-lg px-1 py-1 font-label-md text-label-md text-secondary transition-colors hover:text-on-surface">
                 <span>View all tracker tasks</span>
                 <Icon name="arrow_forward" className="text-body-sm transition-transform group-hover:translate-x-1" />
               </Link>
@@ -408,18 +431,56 @@ export default function Dashboard() {
   );
 }
 
-function StatCard({ label, icon, value, caption, children }: { label: string; icon: string; value: string; caption: string; children?: React.ReactNode }) {
+/** A dashboard number that opens the page behind it. */
+function StatCard({
+  href,
+  hint,
+  label,
+  icon,
+  value,
+  caption,
+  accent = false,
+  children,
+}: {
+  href: string;
+  hint: string;
+  label: string;
+  icon: string;
+  value: string | null;
+  caption: string;
+  accent?: boolean;
+  children?: React.ReactNode;
+}) {
   return (
-    <div className="flex flex-col justify-between rounded-xl bg-surface-container-low p-5 shadow-sm transition-colors hover:bg-surface-container border border-hairline">
-      <div className="flex items-center justify-between">
-        <span className="font-label-sm text-label-sm uppercase tracking-wider text-secondary">{label}</span>
-        <Icon name={icon} className="text-body-lg text-secondary" />
+    <Link
+      href={href}
+      title={hint}
+      className={`tatva-card group relative flex flex-col justify-between overflow-hidden rounded-xl border p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg ${
+        accent ? 'border-primary-container/25 bg-surface-container-lowest hover:border-primary-container/60' : 'border-hairline bg-surface-container-low hover:border-hairline-strong hover:bg-surface-container'
+      }`}
+    >
+      {accent && <div className="pointer-events-none absolute -bottom-4 -right-4 h-28 w-28 rounded-full bg-primary-container/10 blur-2xl" />}
+      <div className="relative flex items-center justify-between gap-2">
+        <span className={`flex items-center gap-1.5 font-label-sm text-label-sm uppercase tracking-wider ${accent ? 'text-on-surface-variant' : 'text-secondary'}`}>
+          {accent && <span className="h-2 w-2 rounded-full bg-primary-container" />}
+          {label}
+        </span>
+        {/* The icon turns into an arrow on hover: "this opens something". */}
+        <span className="relative h-5 w-5 shrink-0">
+          <Icon name={icon} className="absolute inset-0 text-body-lg text-secondary transition-all group-hover:-translate-y-1 group-hover:opacity-0" />
+          <Icon name="arrow_outward" className="absolute inset-0 translate-y-1 text-body-lg text-primary-container opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100" />
+        </span>
       </div>
-      <div className="my-3 flex items-baseline gap-2">
-        <span className="font-mono text-headline-lg font-medium text-on-surface">{value}</span>
+      <div className="relative my-3 flex h-10 items-center">
+        {value === null ? (
+          <Skeleton className="h-8 w-16" />
+        ) : (
+          <span className={`font-heading font-semibold tabular-nums tracking-tight ${accent ? 'text-headline-xl text-primary-container' : 'text-headline-lg text-on-surface'}`}>{value}</span>
+        )}
       </div>
-      <span className="font-caption text-caption text-secondary">{caption}</span>
-      {children && <div className="mt-2">{children}</div>}
-    </div>
+      {value === null ? <Skeleton className="h-3 w-3/4" /> : <span className="relative font-caption text-caption text-secondary">{caption}</span>}
+      {children && value !== null && <div className="relative mt-2">{children}</div>}
+      <span className="sr-only">{hint}</span>
+    </Link>
   );
 }

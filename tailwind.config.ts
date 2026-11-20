@@ -11,20 +11,22 @@ const config: Config = {
   ],
   theme: {
   	extend: {
-      // Geist everywhere; Geist Mono for timestamps, numbers and codes.
+      // Open Sans for body and UI, Arimo for headings, Geist Mono only for
+      // timestamps and codes. Numbers use tabular figures (globals.css).
       fontFamily: {
-        sans: ['var(--font-geist-sans)', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-open-sans)', 'system-ui', 'sans-serif'],
+        heading: ['var(--font-arimo)', 'var(--font-open-sans)', 'sans-serif'],
         mono: ['var(--font-geist-mono)', 'ui-monospace', 'SFMono-Regular', 'Consolas', 'monospace'],
-        'headline-xl': ['var(--font-geist-sans)', 'sans-serif'],
-        'headline-lg': ['var(--font-geist-sans)', 'sans-serif'],
-        'headline-md': ['var(--font-geist-sans)', 'sans-serif'],
-        'headline-sm': ['var(--font-geist-sans)', 'sans-serif'],
-        'body-lg': ['var(--font-geist-sans)', 'sans-serif'],
-        'body-md': ['var(--font-geist-sans)', 'sans-serif'],
-        'body-sm': ['var(--font-geist-sans)', 'sans-serif'],
-        'label-md': ['var(--font-geist-sans)', 'sans-serif'],
-        'label-sm': ['var(--font-geist-sans)', 'sans-serif'],
-        caption: ['var(--font-geist-sans)', 'sans-serif'],
+        'headline-xl': ['var(--font-arimo)', 'sans-serif'],
+        'headline-lg': ['var(--font-arimo)', 'sans-serif'],
+        'headline-md': ['var(--font-arimo)', 'sans-serif'],
+        'headline-sm': ['var(--font-arimo)', 'sans-serif'],
+        'body-lg': ['var(--font-open-sans)', 'sans-serif'],
+        'body-md': ['var(--font-open-sans)', 'sans-serif'],
+        'body-sm': ['var(--font-open-sans)', 'sans-serif'],
+        'label-md': ['var(--font-open-sans)', 'sans-serif'],
+        'label-sm': ['var(--font-open-sans)', 'sans-serif'],
+        caption: ['var(--font-open-sans)', 'sans-serif'],
       },
       // One type scale: headings 600 with slightly tight tracking, body 400.
       fontSize: {

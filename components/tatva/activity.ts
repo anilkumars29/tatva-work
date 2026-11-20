@@ -65,8 +65,17 @@ export function describe(a: Activity): { title: string; detail: string; icon: st
       return { title: `Reopened: ${str(args.task)}`, detail: 'Supabase + Tatva Tracker sheet', icon: 'undo', tone: 'done' };
     case 'upload_document':
       return { title: `Uploaded ${str(args.name)}`, detail: 'Added to the knowledge base', icon: 'upload_file', tone: 'done' };
-    default:
-      return { title: a.tool.replace(/_/g, ' '), detail: '', icon: 'bolt', tone: 'done' };
+    case 'upload_attachment':
+      return { title: `Attached ${str(args.name) || 'a file'}`, detail: 'Added to the meeting and indexed for Pooja', icon: 'attach_file', tone: 'done' };
+    case 'delete_attachment':
+      return { title: `Removed ${str(args.name) || 'an attachment'}`, detail: 'Deleted from the meeting and the knowledge base', icon: 'delete', tone: 'muted' };
+    case 'open_google_doc':
+      return { title: 'Opened the meeting Google Doc', detail: 'Google Docs', icon: 'description', tone: 'done' };
+    default: {
+      // Unknown tool: "do_the_thing" -> "Do the thing".
+      const words = a.tool.replace(/_/g, ' ');
+      return { title: words.charAt(0).toUpperCase() + words.slice(1), detail: '', icon: 'bolt', tone: 'done' };
+    }
   }
 }
 

@@ -38,6 +38,7 @@ export default function LoginForm() {
         <div className="flex flex-col items-center gap-space-md text-center">
           <TatvaMark className="h-14 w-14" />
           <TatvaWordmark className="h-4 w-auto text-on-surface" />
+          <h1 className="sr-only">Sign in to Tatva</h1>
           <p className="text-body-sm text-on-surface-variant">Voice-first meeting assistant. Enter the access code to continue.</p>
         </div>
         <label className="flex flex-col gap-1.5">
@@ -60,9 +61,9 @@ export default function LoginForm() {
             {error}
           </p>
         )}
-        <button type="submit" disabled={busy || !code.trim()} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-container py-2.5 text-label-md font-semibold text-on-primary hover:brightness-105 active:scale-[0.98] disabled:opacity-50">
+        <button type="submit" disabled={busy || !code.trim()} aria-busy={busy} className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-container py-2.5 text-label-md font-semibold text-on-primary hover:bg-primary-fixed active:scale-[0.98] disabled:opacity-50">
           {busy && <Spinner className="text-body-md" />}
-          Sign in
+          {busy ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
     </main>

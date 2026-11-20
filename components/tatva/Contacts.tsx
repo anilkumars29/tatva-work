@@ -1,11 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useApi } from '@/hooks/use-api';
 import { api, downloadText, initials, plural, toCsv } from '@/lib/tatva';
 import type { Contact } from './types';
 import { ownerIsMe, useProfile, type Profile } from './profile';
-import { EmptyState, Icon, Spinner, useTatvaUi } from './ui';
+import { EmptyState, ErrorState, Icon, SkeletonRows, Spinner, useTatvaUi } from './ui';
 
 interface Draft {
   id?: string;
@@ -32,6 +32,13 @@ export default function Contacts() {
   const status = useApi<{ composio: Record<string, boolean> }>('/status');
   const [query, setQuery] = useState('');
   const [draft, setDraft] = useState<Draft | null>(null);
+  const dialogOpen = draft !== null;
+  useEffect(() => {
+    if (!dialogOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setDraft(null);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [dialogOpen]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -79,7 +86,7 @@ export default function Contacts() {
   return (
     <div className="relative flex w-full flex-col">
       <div className="pointer-events-none absolute -top-12 right-24 -z-10 h-96 w-96 rounded-full bg-primary-container/5 blur-3xl" />
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-space-xl p-space-xl">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-space-xl px-space-md py-space-xl sm:px-space-xl">
         <div className="flex flex-col justify-between gap-space-lg md:flex-row md:items-end">
           <div className="flex flex-col gap-space-xs">
             <div className="mb-1 flex items-center gap-space-sm">
@@ -92,7 +99,7 @@ export default function Contacts() {
           <button
             type="button"
             onClick={() => open()}
-            className="group relative flex items-center gap-space-xs rounded-xl bg-primary-container px-space-lg py-space-sm font-label-md text-label-md font-bold tracking-tight text-on-primary transition-all hover:brightness-105 active:scale-[0.98]"
+            className="group relative flex shrink-0 items-center gap-space-xs self-start whitespace-nowrap rounded-xl bg-primary-container px-space-lg py-space-sm font-label-md text-label-md font-bold tracking-tight text-on-primary transition-all hover:bg-primary-fixed active:scale-[0.98]"
           >
             <Icon name="add" className="text-headline-sm transition-transform duration-200 group-hover:rotate-90" />
             <span>Add contact</span>
@@ -105,8 +112,9 @@ export default function Contacts() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="w-full rounded-xl bg-surface-container-low py-space-sm pl-11 pr-space-md font-body-md text-body-md text-on-surface outline-none transition-all placeholder:text-on-surface-variant/60 focus:bg-surface-container border border-hairline"
-              placeholder="Search by name, role or email..."
+              aria-label="Search contacts"
+              className="w-full rounded-xl border border-hairline bg-surface-container-low py-space-sm pl-11 pr-space-md font-body-md text-body-md text-on-surface outline-none transition-all placeholder:text-on-surface-variant/60 hover:border-hairline-strong focus:bg-surface-container focus:ring-1 focus:ring-primary-container"
+              placeholder="Search by name, role or email…"
               type="text"
             />
           </div>
@@ -117,7 +125,7 @@ export default function Contacts() {
               aria-label="Export contacts as CSV"
               disabled={!data?.contacts.length}
               onClick={exportCsv}
-              className="rounded-xl bg-surface-container-low p-2 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface disabled:opacity-40 border border-hairline"
+              className="rounded-xl border border-hairline bg-surface-container-low p-2 text-on-surface-variant transition-colors hover:border-hairline-strong hover:bg-surface-container hover:text-on-surface disabled:opacity-40"
             >
               <Icon name="file_download" className="text-headline-sm" />
             </button>
@@ -126,19 +134,15 @@ export default function Contacts() {
 
         <div className="overflow-hidden rounded-2xl bg-surface-container-lowest shadow-xl border border-hairline">
           <div className="grid grid-cols-12 bg-surface-container-low px-space-lg py-space-md font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">
-            <div className="col-span-4">Member / Identity</div>
+            <div className="col-span-9 sm:col-span-4">Member / Identity</div>
             <div className="col-span-3 hidden sm:block">Email Address</div>
             <div className="col-span-2 hidden md:block">Slack Handle</div>
-            <div className="col-span-5 sm:col-span-3 md:col-span-2">Assigned Role</div>
+            <div className="col-span-3 hidden sm:block md:col-span-2">Assigned Role</div>
             <div className="col-span-3 text-right sm:col-span-2 md:col-span-1">Actions</div>
           </div>
           <div className="flex flex-col">
-            {!data && !error && (
-              <div className="flex justify-center p-space-xl text-on-surface-variant">
-                <Spinner />
-              </div>
-            )}
-            {error && !data && <EmptyState icon="error" title="Couldn't load contacts" body={error} />}
+            {!data && !error && <SkeletonRows rows={4} />}
+            {error && !data && <ErrorState title="Couldn't load contacts" message={error} onRetry={reload} />}
             {data && contacts.length === 0 && <EmptyState icon="person_search" title={query ? 'No contacts match' : 'No contacts yet'} body={query ? undefined : 'Add your team so Pooja can email and invite them.'} />}
             {contacts.map((c, i) => {
               const self = isSelf(c, profile);
@@ -149,7 +153,7 @@ export default function Contacts() {
                     self ? 'bg-surface-container-low/40' : i % 2 ? 'bg-surface-container-lowest/80' : 'bg-surface-container-lowest'
                   }`}
                 >
-                  <div className="col-span-4 flex min-w-0 items-center gap-space-md pr-space-xs">
+                  <div className="col-span-9 flex min-w-0 items-center gap-space-md pr-space-xs sm:col-span-4">
                     <div className="relative shrink-0">
                       <div
                         className={`flex h-10 w-10 items-center justify-center rounded-xl font-headline-sm text-headline-sm font-bold ${
@@ -158,32 +162,34 @@ export default function Contacts() {
                       >
                         {initials(c.name)}
                       </div>
-                      {self && <span className="absolute -bottom-1 -right-1 rounded bg-surface px-1 font-mono text-[9px] font-bold uppercase tracking-tighter text-primary-container shadow">You</span>}
+                      {self && <span className="absolute -bottom-1 -right-1 rounded bg-surface px-1 text-[9px] font-bold uppercase tracking-wide text-primary-container shadow">You</span>}
                     </div>
                     <div className="flex min-w-0 flex-col">
                       <div className="flex items-center gap-1.5 truncate">
-                        <span className="truncate font-label-md text-label-md text-on-surface transition-colors group-hover:text-primary">{c.name}</span>
-                        {self && <span className="rounded bg-surface-container px-1.5 py-0.5 font-label-sm text-[10px] font-semibold uppercase tracking-wide text-secondary">Active Account</span>}
+                        <span className="truncate font-label-md text-label-md text-on-surface transition-colors group-hover:text-primary" title={c.name}>{c.name}</span>
+                        {self && <span className="hidden shrink-0 whitespace-nowrap rounded bg-surface-container px-1.5 py-0.5 font-label-sm text-[10px] font-semibold uppercase tracking-wide text-secondary lg:inline">Active Account</span>}
                       </div>
-                      <span className="truncate font-body-sm text-body-sm text-on-surface-variant sm:hidden">{c.email}</span>
+                      <span className="truncate font-body-sm text-body-sm text-on-surface-variant sm:hidden" title={c.email ?? undefined}>{[c.role, c.email].filter(Boolean).join(' · ')}</span>
                     </div>
                   </div>
                   <div className="col-span-3 hidden min-w-0 items-center pr-space-xs sm:flex">
-                    <span className="truncate font-body-md text-body-md text-on-surface-variant">{c.email ?? '—'}</span>
+                    <span className="truncate font-body-md text-body-md text-on-surface-variant" title={c.email ?? undefined}>{c.email ?? "—"}</span>
                   </div>
-                  <div className="col-span-2 hidden items-center md:flex">
+                  <div className="col-span-2 hidden min-w-0 items-center pr-space-xs md:flex">
                     {c.slack_handle ? (
-                      <div className="flex items-center gap-1.5 rounded-md bg-surface-container px-2.5 py-1 font-mono font-label-sm text-label-sm text-on-surface">
+                      <div className="flex min-w-0 items-center gap-0.5 rounded-md bg-surface-container px-2.5 py-1 font-mono text-label-sm text-on-surface" title={`@${c.slack_handle}`}>
                         <span className="text-primary-container">@</span>
-                        {c.slack_handle}
+                        <span className="truncate">{c.slack_handle}</span>
                       </div>
                     ) : (
                       <span className="font-body-sm text-body-sm text-on-surface-variant">—</span>
                     )}
                   </div>
-                  <div className="col-span-5 flex min-w-0 items-center sm:col-span-3 md:col-span-2">
+                  <div className="col-span-3 hidden min-w-0 items-center sm:flex md:col-span-2">
                     {c.role ? (
-                      <span className={`inline-flex items-center truncate rounded-lg bg-surface-container-high px-space-sm py-1 font-label-md text-label-md ${self ? 'text-primary-container' : 'text-on-surface'}`}>{c.role}</span>
+                      <span className={`block max-w-full truncate rounded-lg bg-surface-container-high px-space-sm py-1 font-label-md text-label-md ${self ? 'text-primary-container' : 'text-on-surface'}`} title={c.role}>
+                        {c.role}
+                      </span>
                     ) : (
                       <span className="font-body-sm text-body-sm text-on-surface-variant">—</span>
                     )}
@@ -203,7 +209,7 @@ export default function Contacts() {
               );
             })}
           </div>
-          <div className="flex items-center justify-between bg-surface-container-lowest px-space-lg py-space-sm font-caption text-caption text-on-surface-variant">
+          <div className="flex flex-wrap items-center justify-between gap-x-space-md gap-y-1 bg-surface-container-lowest px-space-lg py-space-sm font-caption text-caption text-on-surface-variant">
             <span>Pooja can email and invite {plural(reachable, 'contact')}</span>
             <div className="flex items-center gap-2">
               <span className={`h-1.5 w-1.5 rounded-full ${workspaceOk ? 'bg-tertiary-fixed' : workspaceOk === false ? 'bg-error' : 'bg-surface-container-highest'}`} />
@@ -254,7 +260,8 @@ export default function Contacts() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="inline-flex items-center gap-2 rounded-xl bg-primary-container px-space-xl py-2.5 font-label-md text-label-md font-bold tracking-tight text-on-primary transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-60"
+                  aria-busy={saving}
+                  className="inline-flex items-center gap-2 rounded-xl bg-primary-container px-space-xl py-2.5 font-label-md text-label-md font-bold tracking-tight text-on-primary transition-all hover:bg-primary-fixed active:scale-[0.98] disabled:opacity-60"
                 >
                   {saving && <Spinner className="text-body-md" />}
                   Save contact

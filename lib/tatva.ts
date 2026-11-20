@@ -11,12 +11,17 @@ export class ApiError extends Error {
 
 export async function api<T>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
   const { json, headers, ...rest } = init;
-  const response = await fetch(`/tatva${path}`, {
-    ...rest,
-    headers: { ...(json !== undefined ? { 'Content-Type': 'application/json' } : {}), ...headers },
-    body: json !== undefined ? JSON.stringify(json) : rest.body,
-    cache: 'no-store',
-  });
+  let response: Response;
+  try {
+    response = await fetch(`/tatva${path}`, {
+      ...rest,
+      headers: { ...(json !== undefined ? { 'Content-Type': 'application/json' } : {}), ...headers },
+      body: json !== undefined ? JSON.stringify(json) : rest.body,
+      cache: 'no-store',
+    });
+  } catch {
+    throw new ApiError("Couldn't reach Tatva. Check your connection and try again.", 0);
+  }
   const text = await response.text();
   let data: unknown = null;
   try {
@@ -28,7 +33,11 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
     const message =
       (data as { error?: string; say?: string } | null)?.error ??
       (data as { say?: string } | null)?.say ??
-      (response.status === 500 && !data ? 'The Tatva server is not reachable. Is `pnpm run dev` running in server/?' : `Request failed (${response.status})`);
+      (response.status >= 500 && !data
+        ? "Tatva's server didn't answer. It may be waking up; try again in a few seconds."
+        : response.status === 401
+          ? 'Your session has ended. Reload the page to sign in again.'
+          : `Request failed (${response.status})`);
     throw new ApiError(message, response.status);
   }
   return data as T;

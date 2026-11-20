@@ -178,7 +178,7 @@ function EditProfileDialog({ onClose }: { onClose: () => void }) {
           <button type="button" onClick={onClose} className="rounded-lg border border-hairline bg-surface-container-high px-space-md py-2 text-label-md text-on-surface hover:bg-surface-bright">
             Cancel
           </button>
-          <button type="submit" disabled={busy || !draft.name.trim()} className="inline-flex items-center gap-2 rounded-lg bg-primary-container px-space-md py-2 text-label-md font-semibold text-on-primary hover:brightness-105 active:scale-[0.98] disabled:opacity-50">
+          <button type="submit" disabled={busy || !draft.name.trim()} className="inline-flex items-center gap-2 rounded-lg bg-primary-container px-space-md py-2 text-label-md font-semibold text-on-primary hover:bg-primary-fixed active:scale-[0.98] disabled:opacity-50">
             {busy && <Spinner className="text-body-md" />}
             Save profile
           </button>
@@ -253,7 +253,7 @@ function ProfileMenu({ extension, onEdit, onClose, authEnabled }: { extension: s
         <div className="min-w-0 flex-1">
           <p className="truncate text-label-md text-on-surface">{profile?.name ?? (profileError ? 'Profile unavailable' : 'Loading…')}</p>
           {profile?.role && <p className="truncate text-body-sm text-on-surface-variant">{profile.role}</p>}
-          {profile?.email && <p className="truncate font-mono text-caption text-on-surface-variant">{profile.email}</p>}
+          {profile?.email && <p className="truncate text-caption text-on-surface-variant" title={profile.email}>{profile.email}</p>}
         </div>
       </div>
       <div className="px-space-md pb-space-md">
@@ -284,9 +284,9 @@ function ProfileMenu({ extension, onEdit, onClose, authEnabled }: { extension: s
       <div className="border-t border-hairline pb-space-sm">
         <div className="flex items-center justify-between px-space-md pb-1 pt-space-sm">
           <p className="text-label-sm uppercase text-on-surface-variant">
-            Connections <span className="font-mono normal-case">{status ? `${connectedCount}/${CONNECTIONS.length}` : ''}</span>
+            Connections <span className="normal-case">{status ? `${connectedCount}/${CONNECTIONS.length}` : ''}</span>
           </p>
-          <button type="button" onClick={() => void load(true)} disabled={refreshing} className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-caption text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface disabled:opacity-50">
+          <button type="button" onClick={() => void load(true)} disabled={refreshing} aria-busy={refreshing} className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-caption text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface disabled:opacity-50">
             <Icon name="refresh" className={`text-body-sm ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
           </button>
@@ -302,22 +302,30 @@ function ProfileMenu({ extension, onEdit, onClose, authEnabled }: { extension: s
         )}
         <p className="px-space-md pt-1 text-caption text-on-surface-variant">Via Composio. Pooja can act only through connected apps.</p>
       </div>
-      {authEnabled && (
-        <div className="border-t border-hairline p-space-sm">
-          <button
-            type="button"
-            role="menuitem"
-            onClick={async () => {
-              await fetch('/api/logout', { method: 'POST' }).catch(() => {});
-              window.location.assign('/login');
-            }}
-            className="flex w-full items-center gap-2 rounded-lg px-space-sm py-2 text-label-md text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-          >
-            <Icon name="logout" className="text-body-lg" />
-            Sign out
-          </button>
-        </div>
-      )}
+      {authEnabled && <SignOutButton />}
+    </div>
+  );
+}
+
+function SignOutButton() {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="border-t border-hairline p-space-sm">
+      <button
+        type="button"
+        role="menuitem"
+        disabled={busy}
+        aria-busy={busy}
+        onClick={async () => {
+          setBusy(true);
+          await fetch('/api/logout', { method: 'POST' }).catch(() => {});
+          window.location.assign('/login');
+        }}
+        className="flex w-full items-center gap-2 rounded-lg px-space-sm py-2 text-label-md text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+      >
+        {busy ? <Spinner className="text-body-lg" /> : <Icon name="logout" className="text-body-lg" />}
+        {busy ? 'Signing out…' : 'Sign out'}
+      </button>
     </div>
   );
 }
@@ -330,14 +338,29 @@ function Shell({ children, authEnabled }: { children: ReactNode; authEnabled: bo
   const { profile } = useProfile();
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  // Below lg the sidebar is a drawer behind a menu button.
+  const [navOpen, setNavOpen] = useState(false);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
+  useEffect(() => setNavOpen(false), [pathname]);
+  useEffect(() => {
+    if (!navOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setNavOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [navOpen]);
   const isActive = (href: string) => (href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`));
 
   return (
     <>
-      <aside className="fixed left-0 top-0 z-50 flex h-screen w-60 select-none flex-col justify-between border-r border-hairline bg-surface-container-lowest py-space-lg">
+      {navOpen && <div aria-hidden="true" className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm lg:hidden" onMouseDown={(e) => e.target === e.currentTarget && setNavOpen(false)} />}
+      <aside
+        id="tatva-nav"
+        className={`fixed left-0 top-0 z-50 flex h-dvh w-60 select-none flex-col justify-between overflow-y-auto border-r border-hairline bg-surface-container-lowest py-space-lg transition-transform duration-200 lg:translate-x-0 ${
+          navOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
+        }`}
+      >
         <div className="flex w-full flex-col">
-          <Link href="/" aria-label="Tatva home" className="mx-3 mb-space-xl flex items-center rounded-lg px-2 py-1">
+          <Link href="/" aria-label="Tatva home" className="mx-3 mb-space-xl flex items-center rounded-lg px-2 py-1 hover:bg-surface-container">
             <TatvaLockup />
           </Link>
           <nav className="flex w-full flex-col gap-0.5 px-3">
@@ -367,7 +390,7 @@ function Shell({ children, authEnabled }: { children: ReactNode; authEnabled: bo
             onClick={() => setEditing(true)}
             disabled={!profile}
             title="Edit profile"
-            className="flex items-center gap-space-sm rounded-lg border border-hairline bg-surface-container-low p-2 text-left hover:bg-surface-container"
+            className="flex items-center gap-space-sm rounded-lg border border-hairline bg-surface-container-low p-2 text-left hover:border-hairline-strong hover:bg-surface-container"
           >
             <Avatar profile={profile} size={32} />
             <span className="flex min-w-0 flex-1 flex-col">
@@ -378,8 +401,23 @@ function Shell({ children, authEnabled }: { children: ReactNode; authEnabled: bo
           </button>
         </div>
       </aside>
-      <div className="pl-60">
-        <header className="fixed left-60 right-0 top-0 z-40 flex h-16 items-center justify-end gap-space-md border-b border-hairline bg-surface/80 px-space-xl backdrop-blur-xl">
+      <div className="lg:pl-60">
+        <header className="fixed left-0 right-0 top-0 z-40 flex h-16 items-center justify-between gap-space-md border-b border-hairline bg-surface/80 px-space-md backdrop-blur-xl sm:px-space-xl lg:left-60 lg:justify-end">
+          <div className="flex items-center gap-space-sm lg:hidden">
+            <button
+              type="button"
+              aria-label="Open navigation"
+              aria-controls="tatva-nav"
+              aria-expanded={navOpen}
+              onClick={() => setNavOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+            >
+              <Icon name="menu" className="text-headline-sm" />
+            </button>
+            <Link href="/" aria-label="Tatva home" className="rounded-lg px-1 py-1 hover:bg-surface-container">
+              <TatvaLockup />
+            </Link>
+          </div>
           <div className="relative">
             <button
               type="button"

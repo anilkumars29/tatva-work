@@ -430,14 +430,14 @@ export default function TalkToTatva() {
 
         <div className="grid grid-cols-1 items-start gap-space-lg xl:grid-cols-12">
           <section className="flex min-w-0 flex-col gap-space-lg xl:col-span-8">
-            <div className="scrollbar-none flex items-center gap-space-sm overflow-x-auto pb-1">
+            <div className="flex flex-wrap items-center gap-space-sm">
               {CHIPS.map((c) => (
                 <button
                   key={c.text}
                   type="button"
                   disabled={phase === 'starting' || phase === 'ending'}
                   onClick={() => ask(c.text)}
-                  className="group flex items-center gap-2 whitespace-nowrap rounded-full bg-surface-container-low px-space-md py-2 text-on-surface shadow-sm transition-all hover:bg-surface-container-high active:scale-95 disabled:opacity-50"
+                  className="group flex items-center gap-2 whitespace-nowrap rounded-full border border-hairline bg-surface-container-low px-space-md py-2 text-on-surface shadow-sm transition-all hover:border-hairline-strong hover:bg-surface-container-high disabled:opacity-50"
                 >
                   <Icon name={c.icon} className={`text-body-md ${c.color} transition-transform group-hover:rotate-12`} />
                   <span className="font-label-md text-label-md">{c.text}</span>
@@ -500,7 +500,7 @@ export default function TalkToTatva() {
                       type="button"
                       onClick={start}
                       disabled={phase === 'starting'}
-                      className="flex items-center gap-2.5 rounded-xl bg-primary-container px-6 py-3 text-on-primary transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-60"
+                      className="flex items-center gap-2.5 rounded-xl bg-primary-container px-6 py-3 text-on-primary transition-all hover:bg-primary-fixed active:scale-[0.98] disabled:opacity-60"
                     >
                       {phase === 'starting' ? <Spinner className="text-body-lg" /> : <Icon name="call" className="text-body-lg" />}
                       <span className="font-label-md text-label-md font-bold">{phase === 'starting' ? 'Connecting…' : 'Start conversation'}</span>
@@ -512,12 +512,12 @@ export default function TalkToTatva() {
                     aria-pressed={muted}
                     disabled={!live}
                     onClick={() => applyMute(!muted)}
-                    className={`flex h-12 w-12 items-center justify-center rounded-xl shadow-sm transition-all active:scale-95 disabled:opacity-40 ${muted ? 'bg-primary-container text-on-primary' : 'bg-surface-container-high text-on-surface hover:bg-surface-variant'}`}
+                    className={`flex h-12 w-12 items-center justify-center rounded-xl shadow-sm transition-all disabled:opacity-40 ${muted ? 'bg-primary-container text-on-primary hover:bg-primary-fixed' : 'bg-surface-container-high text-on-surface hover:bg-surface-variant'}`}
                   >
                     <Icon name={muted ? 'mic_off' : 'mic'} className="text-headline-sm" />
                   </button>
                 </div>
-                <div className="flex items-center gap-1.5 rounded-lg bg-surface-container-low px-3 py-1.5 font-caption text-caption text-on-surface-variant border border-hairline">
+                <div className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-hairline bg-surface-container-low px-3 py-1.5 font-caption text-caption text-on-surface-variant">
                   <kbd className="rounded bg-surface-container-highest px-1.5 py-0.5 font-mono text-[10px] text-on-surface">SPACE</kbd>
                   <span>to push-to-talk while muted</span>
                 </div>
@@ -538,7 +538,7 @@ export default function TalkToTatva() {
                     title="Download transcript"
                     disabled={bubbles.length === 0}
                     onClick={downloadTranscript}
-                    className="rounded p-1 text-on-surface-variant transition-colors hover:text-on-surface disabled:opacity-40"
+                    className="rounded-md p-1 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface disabled:opacity-40"
                   >
                     <Icon name="download" className="text-body-md" />
                   </button>
@@ -611,7 +611,7 @@ export default function TalkToTatva() {
                     aria-label="Send"
                     type="submit"
                     disabled={!draft.trim() || phase === 'starting' || phase === 'ending'}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-container text-on-primary shadow-sm transition-all hover:scale-105 active:scale-95 disabled:opacity-40"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-container text-on-primary shadow-sm transition-all hover:bg-primary-fixed disabled:opacity-40"
                   >
                     <Icon name="keyboard_return" className="text-body-lg font-bold" />
                   </button>
@@ -658,8 +658,10 @@ export default function TalkToTatva() {
                       </div>
                       <div className="flex min-w-0 flex-1 flex-col">
                         <div className="flex items-center justify-between gap-2">
-                          <span className={`truncate font-label-md text-label-md font-semibold ${d.tone === 'error' ? 'text-error' : 'text-on-surface'}`}>{d.title}</span>
-                          <span className="shrink-0 font-mono font-caption text-caption text-on-surface-variant">{stamp(a.created_at)}</span>
+                          <span className={`truncate font-label-md text-label-md font-semibold ${d.tone === 'error' ? 'text-error' : 'text-on-surface'}`} title={d.title}>
+                            {d.title}
+                          </span>
+                          <span className="shrink-0 whitespace-nowrap font-mono text-caption text-on-surface-variant">{stamp(a.created_at)}</span>
                         </div>
                         {d.detail && <p className="line-clamp-2 font-body-sm text-body-sm text-on-surface-variant">{d.detail}</p>}
                         {!session && a.session_id && <span className="font-caption text-caption text-on-surface-variant/70">{a.session_id === 'web' ? 'From the app' : 'Voice'}</span>}
@@ -690,8 +692,9 @@ export default function TalkToTatva() {
                           <button
                             type="button"
                             disabled={!!deciding}
+                            aria-busy={deciding === 'approve'}
                             onClick={() => decide('approve')}
-                            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary-container px-4 py-2.5 font-label-md text-label-md font-bold text-on-primary transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-60"
+                            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary-container px-4 py-2.5 font-label-md text-label-md font-bold text-on-primary transition-all hover:bg-primary-fixed active:scale-[0.98] disabled:opacity-60"
                           >
                             {deciding === 'approve' ? <Spinner className="text-body-md" /> : <Icon name="send" className="text-body-md font-bold" />}
                             <span>{pending.status === 'failed' ? 'Try again' : 'Approve & Send'}</span>
@@ -700,12 +703,14 @@ export default function TalkToTatva() {
                             type="button"
                             disabled={!!deciding}
                             onClick={() => decide('cancel')}
-                            className="rounded-lg bg-surface-container-high px-3 py-2.5 font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-variant disabled:opacity-60"
+                            aria-busy={deciding === 'cancel'}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-surface-container-high px-3 py-2.5 font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-variant disabled:opacity-60"
                           >
+                            {deciding === 'cancel' && <Spinner className="text-body-md" />}
                             Cancel
                           </button>
                         </div>
-                        <button type="button" disabled title="Coming soon" className="flex cursor-not-allowed items-center justify-center gap-1 font-label-sm text-label-sm text-on-surface-variant opacity-60">
+                        <button type="button" disabled title="Coming soon" className="flex items-center justify-center gap-1 font-label-sm text-label-sm text-on-surface-variant">
                           <Icon name="edit" className="text-body-sm" /> Edit draft <ComingSoon />
                         </button>
                       </div>
@@ -717,7 +722,7 @@ export default function TalkToTatva() {
                       <div className="flex min-w-0 flex-1 flex-col">
                         <div className="flex items-center justify-between gap-2">
                           <span className="truncate font-label-md text-label-md font-semibold text-on-surface">{ACTION_VERB[pending.kind] ?? pending.kind}</span>
-                          <span className="font-mono font-caption text-caption text-on-surface-variant">Queued</span>
+                          <span className="font-caption text-caption text-on-surface-variant">Queued</span>
                         </div>
                         <p className="font-body-sm text-body-sm text-on-surface-variant">Runs as soon as you approve (by voice or here)</p>
                       </div>
@@ -734,7 +739,7 @@ export default function TalkToTatva() {
               </div>
             </div>
 
-            <Link href="/knowledge" className="flex items-center justify-between rounded-2xl bg-surface-container-low p-space-md shadow-sm transition-colors hover:bg-surface-container border border-hairline">
+            <Link href="/knowledge" className="tatva-card group flex items-center justify-between rounded-2xl border border-hairline bg-surface-container-low p-space-md shadow-sm transition-colors hover:border-hairline-strong hover:bg-surface-container">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container-high text-primary-container">
                   <Icon name="folder_open" className="text-headline-sm" />
@@ -748,7 +753,7 @@ export default function TalkToTatva() {
                   </span>
                 </div>
               </div>
-              <Icon name="chevron_right" className="text-body-md text-on-surface-variant" />
+              <Icon name="chevron_right" className="text-body-md text-on-surface-variant transition-transform group-hover:translate-x-0.5" />
             </Link>
           </aside>
         </div>

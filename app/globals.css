@@ -199,42 +199,118 @@ html.dark {
   color-scheme: dark;
 }
 :root {
-  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-sans: var(--font-open-sans), system-ui, sans-serif;
 }
 body {
   overscroll-behavior: none;
   background: #0e0e10;
   /* Tabular figures everywhere so numbers line up and don't jitter. */
   font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum' 1, 'cv11' 1;
+  font-feature-settings: 'tnum' 1;
   text-rendering: optimizeLegibility;
+  /* No blinking caret on text: only real inputs get one (below). */
+  caret-color: transparent;
+}
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-arimo), var(--font-open-sans), sans-serif;
+}
+input,
+textarea,
+[contenteditable='true'],
+[contenteditable=''] {
+  caret-color: #fef105;
 }
 ::selection {
-  background: rgba(254, 241, 5, 0.25);
+  background: rgba(254, 241, 5, 0.28);
   color: #fff;
 }
-/* Smooth, consistent interaction states. */
+
+/* ---- Interaction states (every clickable thing) ----
+   Components add their own hover colours; this guarantees the basics:
+   pointer cursor, a pressed state, a focus ring and a disabled look. */
+a[href],
+button,
+summary,
+label[for],
+select,
+[role='button'],
+[role='tab'],
+[role='menuitem'],
+[role='option'],
+[role='switch'],
+[role='checkbox'],
+[role='radio'],
+input[type='checkbox'],
+input[type='radio'],
+input[type='file'],
+input[type='range'] {
+  cursor: pointer;
+}
 a,
 button,
+summary,
 [role='button'],
+[role='tab'],
+[role='menuitem'],
 input,
 select,
 textarea {
-  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform, scale, filter;
   transition-duration: 150ms;
   transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
 }
+/* Pressed: a small push, for anything that isn't a text field. */
+button:not(:disabled):active,
+a[href]:active,
+[role='button']:not([aria-disabled='true']):active,
+[role='tab']:active,
+[role='menuitem']:active {
+  /* `scale`, not `transform`: it composes with Tailwind's translate classes. */
+  scale: 0.98;
+}
+/* Large clickable surfaces (cards, table rows) press more gently. */
+.tatva-card:active,
+a.tatva-card:active {
+  scale: 0.995;
+}
 :focus-visible {
-  outline: 2px solid rgba(254, 241, 5, 0.55);
+  outline: 2px solid #fef105;
   outline-offset: 2px;
   border-radius: 6px;
 }
-input:focus-visible,
+/* Text fields show focus with their own ring (inputClass). */
+input:not([type='checkbox']):not([type='radio']):not([type='range']):focus-visible,
 textarea:focus-visible,
 select:focus-visible {
   outline: none;
 }
-/* Thin, quiet scrollbars. */
+/* Disabled: dimmed, not-allowed cursor, no hover or press effects. */
+button:disabled,
+button[aria-disabled='true'],
+[role='button'][aria-disabled='true'],
+a[aria-disabled='true'],
+input:disabled,
+select:disabled,
+textarea:disabled,
+fieldset:disabled * {
+  cursor: not-allowed !important;
+  opacity: 0.5;
+  scale: none !important;
+  filter: none !important;
+}
+button:disabled:hover,
+[aria-disabled='true']:hover {
+  filter: none;
+}
+/* Busy buttons (spinner showing) keep their look but ignore clicks. */
+[aria-busy='true'] {
+  cursor: progress !important;
+}
+
+/* ---- Scrollbars: thin, quiet, brighter on hover ---- */
 * {
   scrollbar-width: thin;
   scrollbar-color: #2e2e33 transparent;
@@ -246,9 +322,42 @@ select:focus-visible {
 *::-webkit-scrollbar-thumb {
   background: #2e2e33;
   border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
-*::-webkit-scrollbar-track {
+*::-webkit-scrollbar-thumb:hover {
+  background: #4a4a52;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* ---- Loading skeletons ---- */
+@keyframes tatva-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.skeleton {
+  border-radius: 6px;
+  background: linear-gradient(90deg, #1b1b1f 25%, #26262b 37%, #1b1b1f 63%);
+  background-size: 400% 100%;
+  animation: tatva-shimmer 1.4s ease infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+  button:not(:disabled):active,
+  a[href]:active,
+  [role='button']:active {
+    scale: none;
+  }
 }
 .material-symbols-outlined {
   font-family: 'Material Symbols Outlined';

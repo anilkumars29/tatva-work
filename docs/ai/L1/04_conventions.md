@@ -73,6 +73,13 @@ When changing workflow/contracts/ownership in `components` or `app/api`, update:
 - For UI/client runtime changes, run at least lint + typecheck + build.
 - Prefer narrow checks during iteration, full `pnpm run verify` before handoff.
 
+## Tatva UI Conventions
+
+- Fonts: Arimo (headings, `font-heading` / `font-headline-*`), Open Sans (body/UI), Geist Mono only for timestamps and codes; tabular figures everywhere.
+- Every clickable element: pointer cursor, a visible `hover:` style, pressed state and focus ring (base rules in `app/globals.css`); disabled items dim with a not-allowed cursor. Check with `node scripts/audit-clickables.mjs components/tatva/*.tsx`.
+- Loading: `Skeleton` / `SkeletonRows`; errors: `ErrorState` with Retry; action buttons show a `Spinner`, set `aria-busy` and are disabled while running.
+- View state that other pages link to lives in the URL (`/tracker?filter=pending`, `/tracker?view=activity`, `/meetings?sort=time_saved`); those pages wrap the client component in `<Suspense>`.
+
 ## Pull Request Hygiene
 
 - Keep scope small and copyable for quickstart consumers.

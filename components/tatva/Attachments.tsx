@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApi } from '@/hooks/use-api';
 import { api, fileSize, relativeDateTime, uploadTarget } from '@/lib/tatva';
-import { DialogFrame, Icon, Spinner, useTatvaUi } from './ui';
+import { DialogFrame, ErrorState, Icon, Skeleton, Spinner, useTatvaUi } from './ui';
 
 export interface Attachment {
   id: string;
@@ -86,7 +86,7 @@ export function AttachmentThumb({ a, className = '' }: { a: Pick<Attachment, 'ki
   return (
     <div className={`flex h-full w-full flex-col items-center justify-center gap-1 bg-surface-container-lowest text-on-surface-variant ${className}`}>
       <Icon name={a.kind === 'pdf' ? 'picture_as_pdf' : 'image'} className="text-[28px]" />
-      <span className="font-mono text-caption">{a.kind === 'pdf' ? `PDF${a.pages ? ` · ${a.pages}p` : ''}` : 'Image'}</span>
+      <span className="text-caption tabular-nums">{a.kind === 'pdf' ? `PDF${a.pages ? ` · ${a.pages}p` : ''}` : 'Image'}</span>
     </div>
   );
 }
@@ -100,9 +100,11 @@ export function AttachmentPreview({ id, onClose }: { id: string; onClose: () => 
     <DialogFrame title={a?.name ?? 'Attachment'} icon={a?.kind === 'pdf' ? 'picture_as_pdf' : 'image'} onClose={onClose}>
       {error && <p className="text-body-sm text-error">{error}</p>}
       {!a && !error && (
-        <p className="flex items-center gap-2 text-body-sm text-on-surface-variant">
-          <Spinner /> Loading…
-        </p>
+        <div role="status" aria-label="Loading attachment" className="flex flex-col gap-space-sm">
+          <Skeleton className="h-48 w-full rounded-lg" />
+          <Skeleton className="h-4 w-1/2" />
+          <Skeleton className="h-4 w-3/4" />
+        </div>
       )}
       {a && (
         <div className="flex max-h-[70vh] flex-col gap-space-md overflow-y-auto">
@@ -112,26 +114,26 @@ export function AttachmentPreview({ id, onClose }: { id: string; onClose: () => 
           )}
           <div className="flex flex-wrap items-center gap-2 text-caption text-on-surface-variant">
             <StatusPill a={a} />
-            <span className="font-mono">{fileSize(a.bytes)}</span>
+            <span className="tabular-nums">{fileSize(a.bytes)}</span>
             {a.label && <span className="rounded bg-surface-container-high px-1.5 py-0.5 capitalize">{a.label}</span>}
-            {a.pages ? <span className="font-mono">{a.pages} pages</span> : null}
-            {a.chunk_count ? <span className="font-mono">{a.chunk_count} chunks</span> : null}
+            {a.pages ? <span className="tabular-nums">{a.pages} pages</span> : null}
+            {a.chunk_count ? <span className="tabular-nums">{a.chunk_count} chunks</span> : null}
           </div>
           {a.summary && <p className="text-body-md text-on-surface">{a.summary}</p>}
           {a.status === 'failed' && a.error && <p className="rounded-lg border border-error/30 bg-error-container/30 p-space-sm text-body-sm text-error">{a.error}</p>}
           {a.text_content && (
             <div className="flex flex-col gap-1">
               <span className="text-label-sm uppercase text-on-surface-variant">What Tatva read {a.kind === 'image' ? '(vision model)' : '(PDF text)'}</span>
-              <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border border-hairline bg-surface-container-lowest p-space-sm font-mono text-body-sm text-on-surface-variant">{a.text_content}</pre>
+              <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border border-hairline bg-surface-container-lowest p-space-sm font-sans text-body-sm text-on-surface-variant">{a.text_content}</pre>
             </div>
           )}
           <div className="flex justify-end gap-space-sm">
             {a.kind === 'pdf' && (
-              <button type="button" onClick={() => openAttachment(a.id, false).catch((e) => toast(e.message, 'error'))} className="inline-flex items-center gap-1.5 rounded-lg border border-hairline bg-surface-container-high px-space-md py-2 text-label-md text-on-surface hover:bg-surface-bright">
+              <button type="button" onClick={() => openAttachment(a.id, false).catch((e) => toast(e.message, 'error'))} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-hairline bg-surface-container-high px-space-md py-2 text-label-md text-on-surface hover:border-hairline-strong hover:bg-surface-bright">
                 <Icon name="open_in_new" className="text-body-lg" /> Open PDF
               </button>
             )}
-            <button type="button" onClick={() => openAttachment(a.id, true).catch((e) => toast(e.message, 'error'))} className="inline-flex items-center gap-1.5 rounded-lg border border-hairline bg-surface-container-high px-space-md py-2 text-label-md text-on-surface hover:bg-surface-bright">
+            <button type="button" onClick={() => openAttachment(a.id, true).catch((e) => toast(e.message, 'error'))} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-hairline bg-surface-container-high px-space-md py-2 text-label-md text-on-surface hover:border-hairline-strong hover:bg-surface-bright">
               <Icon name="download" className="text-body-lg" /> Download
             </button>
           </div>
@@ -182,6 +184,7 @@ export function MeetingAttachments({ meetingId, meetingTitle }: { meetingId: str
   const [dragging, setDragging] = useState(false);
   const [flash, setFlash] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
 
@@ -284,11 +287,14 @@ export function MeetingAttachments({ meetingId, meetingTitle }: { meetingId: str
     });
 
   const retry = async (a: Attachment) => {
+    setRetrying(a.id);
     try {
       await api(`/attachments/${a.id}/retry`, { method: 'POST' });
       await reload();
     } catch (e) {
       toast(e instanceof Error ? e.message : String(e), 'error');
+    } finally {
+      setRetrying(null);
     }
   };
 
@@ -307,11 +313,11 @@ export function MeetingAttachments({ meetingId, meetingTitle }: { meetingId: str
           {list.length > 0 && <span className="text-caption text-on-surface-variant">{indexed} indexed for Pooja</span>}
         </div>
         <div className="flex items-center gap-space-sm">
-          <span className="hidden items-center gap-1 text-caption text-on-surface-variant md:inline-flex">
+          <span className="hidden items-center gap-1 whitespace-nowrap text-caption text-on-surface-variant md:inline-flex">
             <kbd className="rounded border border-hairline bg-surface-container-high px-1.5 py-0.5 font-mono text-[10px]">Ctrl</kbd>+
             <kbd className="rounded border border-hairline bg-surface-container-high px-1.5 py-0.5 font-mono text-[10px]">V</kbd> to paste a screenshot
           </span>
-          <button type="button" onClick={() => inputRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-lg border border-hairline bg-surface-container-high px-space-md py-2 text-label-md text-on-surface hover:bg-surface-bright">
+          <button type="button" onClick={() => inputRef.current?.click()} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-hairline bg-surface-container-high px-space-md py-2 text-label-md text-on-surface hover:border-hairline-strong hover:bg-surface-bright">
             <Icon name="upload" className="text-body-lg" /> Add files
           </button>
           <input
@@ -328,9 +334,18 @@ export function MeetingAttachments({ meetingId, meetingTitle }: { meetingId: str
         </div>
       </div>
 
-      {error && <p className="text-body-sm text-error">{error}</p>}
+      {error && data && <p className="text-body-sm text-error">{error}</p>}
 
-      {list.length === 0 && uploads.length === 0 ? (
+      {!data && uploads.length === 0 ? (
+        error ? (
+          <ErrorState compact title="Couldn't load attachments" message={error} onRetry={reload} />
+        ) : (
+          <div role="status" aria-label="Loading attachments" className="grid grid-cols-1 gap-space-md sm:grid-cols-2">
+            <Skeleton className="aspect-[16/9] w-full rounded-lg" />
+            <Skeleton className="hidden aspect-[16/9] w-full rounded-lg sm:block" />
+          </div>
+        )
+      ) : list.length === 0 && uploads.length === 0 ? (
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
@@ -343,8 +358,8 @@ export function MeetingAttachments({ meetingId, meetingTitle }: { meetingId: str
       ) : (
         <div className="grid grid-cols-1 gap-space-md sm:grid-cols-2">
           {list.map((a) => (
-            <article key={a.id} className="group flex flex-col overflow-hidden rounded-lg border border-hairline bg-surface-container">
-              <button type="button" onClick={() => setPreview(a.id)} className="relative block aspect-[16/9] w-full overflow-hidden border-b border-hairline bg-surface-container-lowest" aria-label={`Preview ${a.name}`}>
+            <article key={a.id} className="group flex flex-col overflow-hidden rounded-lg border border-hairline bg-surface-container transition-colors hover:border-hairline-strong">
+              <button type="button" onClick={() => setPreview(a.id)} className="relative block aspect-[16/9] w-full overflow-hidden rounded-t-lg border-b border-hairline bg-surface-container-lowest hover:brightness-110" aria-label={`Preview ${a.name}`}>
                 <AttachmentThumb a={a} className="transition-transform duration-300 group-hover:scale-[1.02]" />
                 <span className="absolute left-2 top-2 rounded-full bg-black/75 backdrop-blur">
                   <StatusPill a={a} />
@@ -354,8 +369,8 @@ export function MeetingAttachments({ meetingId, meetingTitle }: { meetingId: str
                 <p className="truncate text-label-md text-on-surface" title={a.name}>
                   {a.name}
                 </p>
-                <p className="flex items-center gap-1.5 text-caption text-on-surface-variant">
-                  <span className="font-mono">{fileSize(a.bytes)}</span>
+                <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 text-caption text-on-surface-variant">
+                  <span className="tabular-nums">{fileSize(a.bytes)}</span>
                   <span>·</span>
                   <span className={a.kind === 'pdf' ? '' : 'capitalize'}>{a.kind === 'pdf' ? `PDF, ${a.pages ?? '?'} pages` : (a.label ?? 'image')}</span>
                   <span>·</span>
@@ -372,8 +387,14 @@ export function MeetingAttachments({ meetingId, meetingTitle }: { meetingId: str
                     <Icon name="download" className="text-body-md" /> Download
                   </button>
                   {a.status === 'failed' && (
-                    <button type="button" onClick={() => void retry(a)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-caption text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface">
-                      <Icon name="refresh" className="text-body-md" /> Retry
+                    <button
+                      type="button"
+                      onClick={() => void retry(a)}
+                      disabled={retrying === a.id}
+                      aria-busy={retrying === a.id}
+                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-caption text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+                    >
+                      {retrying === a.id ? <Spinner className="text-body-md" /> : <Icon name="refresh" className="text-body-md" />} Retry
                     </button>
                   )}
                   <button type="button" onClick={() => remove(a)} aria-label={`Delete ${a.name}`} title="Delete" className="ml-auto inline-flex items-center rounded-md p-1.5 text-on-surface-variant hover:bg-error-container/40 hover:text-error">
@@ -389,13 +410,15 @@ export function MeetingAttachments({ meetingId, meetingTitle }: { meetingId: str
                 {u.error ? <Icon name="error" className="text-[28px] text-error" /> : <Spinner className="text-[28px] text-on-surface-variant" />}
               </div>
               <div className="flex flex-col gap-1.5 p-space-sm">
-                <p className="truncate text-label-md text-on-surface">{u.name}</p>
+                <p className="truncate text-label-md text-on-surface" title={u.name}>
+                  {u.name}
+                </p>
                 {u.error ? (
                   <div className="flex items-center justify-between gap-2">
                     <p className="truncate text-caption text-error" title={u.error}>
                       {u.error}
                     </p>
-                    <button type="button" onClick={() => setUploads((x) => x.filter((y) => y.key !== u.key))} className="text-caption text-on-surface-variant hover:text-on-surface">
+                    <button type="button" onClick={() => setUploads((x) => x.filter((y) => y.key !== u.key))} className="shrink-0 rounded px-1 text-caption text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface">
                       Dismiss
                     </button>
                   </div>
@@ -404,7 +427,7 @@ export function MeetingAttachments({ meetingId, meetingTitle }: { meetingId: str
                     <div className="h-1 overflow-hidden rounded-full bg-surface-container-highest">
                       <div className="h-full rounded-full bg-primary-container transition-[width]" style={{ width: `${Math.round(u.progress * 100)}%` }} />
                     </div>
-                    <p className="font-mono text-caption text-on-surface-variant">
+                    <p className="text-caption tabular-nums text-on-surface-variant">
                       Uploading {Math.round(u.progress * 100)}% · {fileSize(u.bytes)}
                     </p>
                   </>
