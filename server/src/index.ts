@@ -24,7 +24,7 @@ app.use(express.json({ limit: '1mb' }));
 
 // Memory and queue length are here so an uptime monitor (or a test) can watch them.
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, rss_mb: rssMb(), heap_mb: Math.round(process.memoryUsage().heapUsed / 1048576), gc: canFreeMemory(), jobs: queuedJobs() });
+  res.json({ ok: true, rss_mb: rssMb(), heap_mb: Math.round(process.memoryUsage().heapUsed / 1048576), gc: canFreeMemory(), jobs: queuedJobs(), commit: process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? null });
 });
 
 // Every /api route needs the web app's key, the access code (extension) or an upload token.
