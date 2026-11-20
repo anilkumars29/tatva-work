@@ -15,7 +15,9 @@
     "lint": "eslint .",
     "verify:api": "node --import tsx scripts/verify-api-contracts.ts",
     "typecheck": "tsc --noEmit",
-    "verify": "pnpm run doctor && pnpm run lint && pnpm run typecheck && pnpm run verify:api && pnpm run build",
+    "verify": "pnpm run doctor && pnpm run lint && pnpm run typecheck && pnpm run verify:api && pnpm run check:extension && pnpm run build",
+    "check:extension": "node scripts/check-extension.mjs",
+    "test:extension": "node scripts/check-extension.mjs && playwright test --project=extension-popup",
     "test:live": "playwright test",
     "deploy:env": "node scripts/deploy-env.mjs"
   },

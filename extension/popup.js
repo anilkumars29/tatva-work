@@ -45,9 +45,27 @@ let busy = false;
 let tickHandle = null;
 let localError = null;
 
-function sendToWorker(message) {
-  return chrome.runtime.sendMessage({ target: 'service-worker', ...message });
+// The service worker may be asleep or restarting: never let a missing reply
+// throw out of the popup (it would leave the popup half-drawn).
+async function sendToWorker(message) {
+  try {
+    return await chrome.runtime.sendMessage({ target: 'service-worker', ...message });
+  } catch (err) {
+    return { ok: false, error: `The recorder service isn't responding (${err.message}). Reload the extension at chrome://extensions.` };
+  }
 }
+
+// Any unexpected error is shown in the popup instead of failing silently.
+function showFatal(err) {
+  localError = `Something went wrong: ${err?.message || err}`;
+  const box = document.getElementById('error');
+  if (box) {
+    box.textContent = localError;
+    box.hidden = false;
+  }
+}
+window.addEventListener('error', (event) => showFatal(event.error || event.message));
+window.addEventListener('unhandledrejection', (event) => showFatal(event.reason));
 
 function formatDuration(ms) {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -149,6 +167,7 @@ function renderMeeting(upload) {
 async function refresh() {
   const response = await sendToWorker({ type: 'get-state' });
   if (response?.ok) state = response.state;
+  else if (response?.error) localError = response.error;
   render();
 }
 

@@ -1,3 +1,9 @@
+/* The hidden attribute must win over component display rules (.settings is
+   display:flex), or hidden panels show and the popup opens in the wrong state. */
+[hidden] {
+  display: none !important;
+}
+
 :root {
   /* Tatva dark theme, same tokens as the web app. */
   --bg: #0e0e10;

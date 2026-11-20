@@ -156,7 +156,7 @@ Framework **Next.js**, Root Directory **./** → **Environment Variables**: add 
 
 ## 3. Chrome extension
 
-1. `chrome://extensions` → **Tatva Recorder** → reload (version **0.5.1**).
+1. `chrome://extensions` → **Tatva Recorder** → reload (version **0.5.2**).
 2. Click the extension → the **gear icon** → **Cloud** → paste the access code →
    **Save**. It tests the connection ("Connected").
    (**Local** = `localhost:4000`; **Custom** = any other server/web URL, Chrome asks

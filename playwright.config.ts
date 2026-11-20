@@ -22,6 +22,8 @@ export default defineConfig({
     { name: 'app', testMatch: /app\.spec\.ts/ },
     // Loads extension/ into Playwright's Chromium (one-time: pnpm exec playwright install chromium).
     { name: 'extension', testMatch: /extension\.spec\.ts/ },
+    // Toolbar popup opens and renders; needs no server (pnpm test:extension).
+    { name: 'extension-popup', testMatch: /extension-popup\.spec\.ts/ },
     {
       name: 'voice',
       testMatch: /voice\.spec\.ts/,

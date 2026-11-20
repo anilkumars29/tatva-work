@@ -25,7 +25,7 @@ No build step: plain JavaScript, load the folder unpacked. Requires Chrome 116+.
 
 ### Reloading after an update
 
-After pulling changes (current version **0.5.1**): open `chrome://extensions`,
+After pulling changes (current version **0.5.2**): open `chrome://extensions`,
 find **Tatva Recorder** and press its reload icon (or *Load unpacked* → this
 `extension/` folder if it isn't installed). Then reload the Tatva web app tab
 (`http://localhost:3000`): content scripts only attach to pages loaded after
@@ -70,3 +70,11 @@ shows the version. If it still says *not detected*, check the extension's
 - Chrome pages (`chrome://`, the Web Store) can't be captured.
 - Only one capture per tab: another extension or screen share capturing the
   same tab makes Start fail with an error in the popup.
+
+## Checks
+
+- `pnpm run check:extension` (no browser, runs in `pnpm run verify`): manifest is valid, every referenced file exists, each id `popup.js` looks up exists in `popup.html`, `popup.css` keeps `[hidden] { display: none !important; }`, and the version matches the web app's `EXTENSION_VERSION`.
+- `pnpm test:extension`: loads the extension into Playwright's Chromium, opens the toolbar popup on an ordinary page and checks it renders in its default state with no console errors.
+
+If the popup ever seems not to open: right-click the Tatva icon → **Inspect popup** (the DevTools console shows the error), or open `chrome://extensions` → Tatva Recorder → **Errors**.
+
