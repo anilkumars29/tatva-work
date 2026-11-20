@@ -31,3 +31,15 @@ test('pronouns are not owners (speakers are unlabelled)', () => {
   assert.equal(cleanOwner('Priya'), 'Priya');
   assert.equal(cleanOwner('Rahul Das'), 'Rahul Das');
 });
+
+test('an extraction that gave up on a real transcript is rejected', async () => {
+  const { extractionLooksEmpty } = await import('../src/pipeline/quality.js');
+  const none = { decisions: [], action_items: [], stats_mentioned: [], discuss_later: [] };
+  assert.ok(extractionLooksEmpty({ summary: 'The meeting transcript is empty.', ...none }, 1800));
+  assert.ok(extractionLooksEmpty({ summary: 'No content.', ...none }, 1800));
+  assert.equal(extractionLooksEmpty({ summary: 'The meeting transcript is empty.', ...none }, 300), false, 'a tiny recording can be empty');
+  assert.equal(
+    extractionLooksEmpty({ summary: 'The team reviewed platform metrics: 12,000 queries a month and a 68% automation rate.', ...none, stats_mentioned: [1, 2] }, 1800),
+    false,
+  );
+});

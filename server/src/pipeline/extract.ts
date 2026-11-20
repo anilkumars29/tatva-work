@@ -3,6 +3,7 @@ import { config } from '../config.js';
 import { chatWithFallback, reasoningFor, type FallbackHooks } from '../llm.js';
 import { neutralize, UNTRUSTED_RULE } from '../voice/untrusted.js';
 import { cleanOwner } from './owners.js';
+import { extractionLooksEmpty } from './quality.js';
 import { fixDateTime, fixDueDate, zoneOffset } from './dates.js';
 import { formatTimestamp, type Segment } from './transcribe.js';
 
@@ -123,7 +124,12 @@ export interface ExtractOptions {
   hooks?: FallbackHooks;
 }
 
-async function callLlmOnce(system: string, user: string, opts: ExtractOptions, reasoningEffort = config.llmReasoningEffort): Promise<Knowledge> {
+async function callLlmOnce(
+  system: string,
+  user: string,
+  opts: ExtractOptions,
+  reasoningEffort = config.llmReasoningEffort,
+): Promise<{ knowledge: Knowledge; model: string }> {
   const maxCompletionTokens = completionBudget(system, user);
   const { data: response, model } = await chatWithFallback<{ choices: { message: { content: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } }>(
     opts.models ?? config.extractModels,
@@ -146,22 +152,46 @@ async function callLlmOnce(system: string, user: string, opts: ExtractOptions, r
   console.log(`[extract] ${model}: ${response.usage?.prompt_tokens ?? '?'} in + ${response.usage?.completion_tokens ?? '?'} out tokens`);
 
   const content = response.choices?.[0]?.message?.content;
-  if (!content) throw new Error('LLM returned an empty response.');
-  return knowledgeSchema.parse(JSON.parse(content));
+  if (!content) throw new Error(`LLM returned an empty response from ${model}.`);
+  try {
+    return { knowledge: knowledgeSchema.parse(JSON.parse(content)), model };
+  } catch (err) {
+    throw new Error(`Invalid JSON from ${model}: ${err instanceof Error ? err.message.slice(0, 200) : String(err)}`);
+  }
 }
 
-// Structured output occasionally fails validation, usually because reasoning
-// used up the output budget and the JSON was cut off (a meeting with many
-// action items). The retry reasons less, leaving the budget for the answer.
+const INVALID_OUTPUT = /json_validate_failed|max completion tokens|JSON|ZodError|invalid_type|empty response/i;
+
+/**
+ * Runs the extraction down the model chain. Rate limits are handled inside
+ * chatWithFallback; here a model that returns unusable output (invalid or
+ * truncated JSON, or "the transcript is empty" for a real transcript) hands
+ * over to the next model in the chain.
+ */
 async function callLlm(system: string, user: string, opts: ExtractOptions): Promise<Knowledge> {
-  try {
-    return await callLlmOnce(system, user, opts);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (!/json_validate_failed|max completion tokens|JSON|ZodError|invalid_type/i.test(message)) throw err;
-    console.warn(`[extract] invalid structured output, retrying once with low reasoning: ${message.slice(0, 160)}`);
-    return callLlmOnce(system, user, opts, 'low');
+  const chain = opts.models ?? config.extractModels;
+  let start = 0;
+  let fallback: Knowledge | null = null;
+  let lastError: unknown = null;
+  while (start < chain.length) {
+    const models = chain.slice(start);
+    try {
+      const { knowledge, model } = await callLlmOnce(system, user, { ...opts, models });
+      if (!extractionLooksEmpty(knowledge, user.length)) return knowledge;
+      console.warn(`[extract] ${model} returned an empty extraction for a real transcript; trying the next model`);
+      fallback ??= knowledge;
+      start = chain.indexOf(model) + 1;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!INVALID_OUTPUT.test(message)) throw err;
+      lastError = err;
+      const failed = chain.find((m) => message.includes(m));
+      console.warn(`[extract] invalid structured output${failed ? ` from ${failed}` : ''}, trying the next model: ${message.slice(0, 160)}`);
+      start = failed ? chain.indexOf(failed) + 1 : start + 1;
+    }
   }
+  if (fallback) return fallback; // every model saw it as empty: it probably is
+  throw lastError ?? new Error('Extraction failed on every model.');
 }
 
 // Splits segments into parts of at most `maxChars` transcript characters.

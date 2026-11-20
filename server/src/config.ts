@@ -39,9 +39,11 @@ export const config = {
   // Meeting extraction model chain (Groq limits each model separately). It
   // prefers different models from the voice agent, so processing meetings can't
   // use up Pooja's daily budget before a demo. Override: LLM_EXTRACT_MODELS.
-  // Measured on a real 6-minute meeting (21 Nov): qwen3.8-27b ~2.5k tokens,
-  // gpt-oss-20b ~7.9k (mostly reasoning) with the same owners and dates.
-  extractModels: modelList(process.env.LLM_EXTRACT_MODELS ?? process.env.GROQ_LLM_MODEL, ['qwen/qwen3.8-27b', 'openai/gpt-oss-20b']),
+  // gpt-oss-20b at low reasoning first: ~3.5k tokens for a 2-minute meeting and
+  // reliable; qwen3.8-27b is cheaper (~2.5k) but once answered "the transcript
+  // is empty" for a real transcript, so it is the fallback (the quality check
+  // in extract.ts moves on when a model gives up).
+  extractModels: modelList(process.env.LLM_EXTRACT_MODELS ?? process.env.GROQ_LLM_MODEL, ['openai/gpt-oss-20b', 'qwen/qwen3.8-27b']),
   // Transcripts longer than this are extracted part by part, then merged
   // (keeps each request under Groq free-tier tokens-per-minute limits).
   // ~10k chars ≈ 3k tokens, leaving room for the prompt and a full answer.
