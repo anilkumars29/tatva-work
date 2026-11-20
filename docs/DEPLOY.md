@@ -28,9 +28,29 @@ Measured on the production build (`node dist/index.js`) with the embedding model
 
 | Moment | Memory |
 | ------ | ------ |
-| Idle, model loaded | ~320–340 MB |
+| Idle, model loaded | ~250–330 MB |
 | After searches + voice turns | ~230 MB (peak 342 MB) |
 | While indexing an image (vision) + a PDF | ~270 MB (peak 342 MB) |
+| Processing a 6-minute meeting (21 Nov, live) | peak 309 MB |
+| Processing a 20-minute meeting (21 Nov, live) | peak 308 MB |
+
+**Out of memory before 21 Nov.** Embedding transcript windows 32 at a time
+added ~180 MB on top of the model, and a 6-minute meeting took the 512 MB
+instance down while indexing ("Server restarted while processing"). Now the
+server embeds 4 at a time without the ONNX memory arena (~16 MB), runs one heavy
+job at a time (meetings and attachments share a queue), and runs a GC between
+steps. `GET /health` shows `rss_mb`, `heap_mb`, `gc`, queued `jobs` and the
+deployed `commit`; `node scripts/live-processing.mjs upload <file.webm>` uploads a
+recording and samples that memory every second until it is Ready.
+
+**Restarts don't lose meetings.** A meeting being processed keeps a heartbeat
+(`updated_at` every 20 s). Every minute the server resumes meetings whose
+heartbeat stopped for 75 s (crash, out of memory, restart) from their stored
+audio, claiming each one atomically so two instances never both take it, and
+leaving the old instance's work alone during a zero-downtime deploy. After two
+interrupted attempts the meeting is marked failed; **Retry** on the dashboard,
+meetings list or meeting page runs it again. Any server sharing the database
+(e.g. a local `pnpm run dev`) can pick up an abandoned meeting too.
 
 - **Free: the plan in `render.yaml`.** 512 MB (fits, ~170 MB headroom) but a tenth
   of a CPU, and it sleeps after 15 minutes without traffic, so it **needs the

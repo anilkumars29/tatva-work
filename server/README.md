@@ -152,7 +152,9 @@ bucket and processed one at a time by `src/pipeline/attachments.ts`:
   texts at a time without the ONNX memory arena. `GET /health` reports
   `rss_mb`, `heap_mb`, `gc` and queued `jobs`.
 - **Restarts resume.** If the server restarts mid-pipeline (deploy, crash, out
-  of memory), the meeting is processed again from its stored audio on startup.
+  of memory), the meeting is processed again from its stored audio: a heartbeat
+  keeps `updated_at` fresh while it is queued or running, and every minute the
+  server atomically claims meetings whose heartbeat stopped 75 s ago.
   After 2 interrupted attempts it is marked `failed` instead (so one recording
   can't keep crashing the server); the web app shows a **Retry** button on
   failed meetings (dashboard, meetings list, meeting page), which calls
