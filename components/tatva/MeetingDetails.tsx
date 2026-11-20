@@ -266,7 +266,7 @@ export default function MeetingDetails({ id }: { id: string }) {
   return (
     <div className="flex w-full flex-col">
       <div className="flex flex-col gap-space-xl px-space-md py-space-lg sm:px-space-xl">
-        <div className="flex flex-col justify-between gap-space-md md:flex-row md:items-center">
+        <div className="flex flex-col justify-between gap-space-md 2xl:flex-row 2xl:items-center">
           <div className="flex flex-col gap-space-xs">
             <Link href="/meetings" className="group inline-flex w-fit items-center gap-space-xs rounded-md font-label-md text-label-md text-on-surface-variant transition-colors hover:text-primary">
               <Icon name="arrow_back" className="text-body-lg transition-transform group-hover:-translate-x-1" />
@@ -286,7 +286,7 @@ export default function MeetingDetails({ id }: { id: string }) {
             </p>
           </div>
           {ready && (
-            <div className="flex flex-wrap items-center gap-space-sm self-start md:self-center">
+            <div className="flex flex-wrap items-center gap-space-sm self-start 2xl:self-center">
               {/* Flagship: talk to Pooja about this meeting only (meeting mode). */}
               <Link
                 href={`/talk?meeting=${m.id}`}

@@ -423,10 +423,12 @@ function Shell({ children, authEnabled }: { children: ReactNode; authEnabled: bo
             {!pathname.startsWith('/talk') && (
               <Link
                 href="/talk"
-                className="inline-flex items-center gap-1.5 rounded-lg bg-primary-container px-3 py-1.5 font-label-md text-label-md text-on-primary-fixed shadow-sm transition-all hover:bg-primary-fixed"
+                aria-label="Talk to Tatva"
+                className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-primary-container px-3 py-1.5 font-label-md text-label-md text-on-primary-fixed shadow-sm transition-all hover:bg-primary-fixed"
               >
                 <Icon name="mic" className="text-body-lg" />
-                <span className="font-bold">Talk to Tatva</span>
+                <span className="font-bold sm:hidden">Talk</span>
+                <span className="hidden font-bold sm:inline">Talk to Tatva</span>
               </Link>
             )}
             <button
