@@ -785,11 +785,12 @@ function MeetingMoreMenu({ meetingId, title, processing }: { meetingId: string; 
       tone: 'danger',
       confirmLabel: 'Delete meeting',
       body: (
-        <>
+        // One paragraph: the dialog body is a flex container, which drops the spaces between loose children.
+        <p>
           Delete <strong className="text-on-surface">&ldquo;{title}&rdquo;</strong> permanently? This removes its recording, transcript, action items,
           follow-ups, attachments, search index, rows in the Tatva Tracker sheet and its activity, and moves its Google Doc to the Drive trash.
           This can&rsquo;t be undone.
-        </>
+        </p>
       ),
       run: async () => {
         const r = await api<{ deleted: { tracker_rows_deleted: number; google_doc: string; warnings: string[] } }>(`/meetings/${meetingId}`, { method: 'DELETE' });
