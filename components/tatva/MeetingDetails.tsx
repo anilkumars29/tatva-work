@@ -6,6 +6,7 @@ import { useApi } from '@/hooks/use-api';
 import { api, clock, dueLabel, durationLabel, eventDateTime, initials, minutesLabel, plural, relativeDateTime } from '@/lib/tatva';
 import type { Contact, MeetingDetail } from './types';
 import { MeetingAttachments } from './Attachments';
+import { RetryMeetingButton } from './Dashboard';
 import { ComingSoon, EmptyState, ErrorState, Field, Icon, inputClass, Skeleton, Spinner, useTatvaUi } from './ui';
 
 const BARS = 64;
@@ -309,7 +310,8 @@ export default function MeetingDetails({ id }: { id: string }) {
         {!ready && (
           <div className="flex items-center gap-space-sm rounded-xl bg-surface-container-low p-space-md text-on-surface-variant border border-hairline">
             {m.status === 'failed' ? <Icon name="error" className="text-error" /> : <Spinner />}
-            <span className="font-body-md text-body-md">{m.status === 'failed' ? `Processing failed: ${m.error ?? 'unknown error'}` : `Processing: ${m.status}… this page updates automatically.`}</span>
+            <span className="min-w-0 flex-1 font-body-md text-body-md">{m.status === 'failed' ? `Processing failed: ${m.error ?? 'unknown error'}` : `Processing: ${m.status}… this page updates automatically.`}</span>
+            {m.status === 'failed' && m.audio_path && <RetryMeetingButton meetingId={m.id} onRetried={reload} className="shrink-0 py-space-sm" />}
           </div>
         )}
 

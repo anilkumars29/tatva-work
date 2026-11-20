@@ -14,6 +14,7 @@ import { pdfPages, summarize } from './documents.js';
 import { embed } from './embed.js';
 import { scheduleDocSync } from './meeting-doc.js';
 import { windows } from './windows.js';
+import { runJob } from './jobs.js';
 
 export { attachmentCitation };
 
@@ -152,10 +153,9 @@ export async function processAttachment(id: string): Promise<void> {
   }
 }
 
-// One at a time (embedding is CPU-bound, Groq has per-minute limits).
-let queue: Promise<void> = Promise.resolve();
+// Shares the server's single job queue with meetings (memory, Groq limits).
 export function enqueueAttachment(id: string) {
-  queue = queue.then(() => processAttachment(id));
+  runJob(`attachment ${id.slice(0, 8)}`, () => processAttachment(id));
 }
 
 /** Restarts attachments left "processing" by a server restart. */

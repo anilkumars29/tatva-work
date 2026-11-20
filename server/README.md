@@ -33,7 +33,7 @@ A meeting's total is recomputed after processing and after each linked action
 | `POST` | `/api/meetings` | multipart: `audio` (file, required), `title_hint`, `source_url`, `recorded_at` (ISO), `duration_ms` |
 | `GET` | `/api/meetings` | newest first, `?limit=` (max 200) |
 | `GET` | `/api/meetings/:id` | everything incl. `action_items`, `discuss_later`, `transcript_segments`; `?transcript=false` to skip the transcript |
-| `POST` | `/api/meetings/:id/retry` | re-run a `failed` meeting from the stored audio |
+| `POST` | `/api/meetings/:id/retry` | re-run a `failed` meeting from the stored audio (also the web app's Retry button) |
 | `POST` | `/api/search` | `{ query, match_count?, meeting_id?, similarity_threshold? }`: RAG search via `match_knowledge_chunks` |
 | `POST` | `/v1/chat/completions` | Voice agent custom LLM for Agora (OpenAI-compatible SSE). `Authorization: Bearer $VOICE_LLM_API_KEY`, optional `X-Tatva-Session` |
 | `GET` | `/health` | `{ ok: true }` |
@@ -91,6 +91,7 @@ pnpm run typecheck
 pnpm test            # unit tests: date resolution, yes/no detection (no secrets needed; also run in CI)
 pnpm run tunnel      # cloudflared quick tunnel for the voice agent (see below)
 pnpm run test:voice  # plays the demo script against /v1/chat/completions (add -- --no to cancel every action)
+pnpm run measure:memory -- <meeting-id | file.webm> [--minutes=20]  # RSS per pipeline step, no DB writes
 pnpm run seed:demo-meetings  # voices 3 demo meetings with Murf Falcon (4 en-IN voices, not Pooja) and runs them through POST /api/meetings
 ```
 
@@ -144,8 +145,18 @@ bucket and processed one at a time by `src/pipeline/attachments.ts`:
 
 ## Notes
 
-- One meeting is processed at a time. If the server restarts mid-pipeline,
-  that meeting is marked `failed` on startup; use the retry endpoint.
+- **One heavy job at a time.** Meetings and attachments share one queue
+  (`src/pipeline/jobs.ts`), so the 512 MB instance never transcribes, extracts
+  or embeds two things at once. Between steps the pipeline runs a GC
+  (`--expose-gc --max-old-space-size=256`) and logs `rss`; embeddings run 4
+  texts at a time without the ONNX memory arena. `GET /health` reports
+  `rss_mb`, `heap_mb`, `gc` and queued `jobs`.
+- **Restarts resume.** If the server restarts mid-pipeline (deploy, crash, out
+  of memory), the meeting is processed again from its stored audio on startup.
+  After 2 interrupted attempts it is marked `failed` instead (so one recording
+  can't keep crashing the server); the web app shows a **Retry** button on
+  failed meetings (dashboard, meetings list, meeting page), which calls
+  `POST /api/meetings/:id/retry`.
 - **Owners.** Speakers are not labelled (Whisper has no diarization). An action
   item gets an owner when a name is said with it ("Priya, can you…", "Rahul
   will…", "Meera should…"); otherwise it stays unassigned. "I will…" right

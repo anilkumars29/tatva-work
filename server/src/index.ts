@@ -5,12 +5,14 @@ import { allowedOrigin, apiAuth, SERVER_KEY } from './auth.js';
 import { config } from './config.js';
 import { warmUpEmbeddings } from './pipeline/embed.js';
 import { resumeAttachments } from './pipeline/attachments.js';
+import { queuedJobs } from './pipeline/jobs.js';
+import { resumeInterruptedMeetings } from './pipeline/process.js';
+import { canFreeMemory, rssMb } from './memory.js';
 import { appRouter } from './routes/app.js';
 import { attachmentsRouter } from './routes/attachments.js';
 import { chatRouter } from './routes/chat.js';
 import { knowledgeRouter } from './routes/knowledge.js';
 import { meetingsRouter } from './routes/meetings.js';
-import { supabase } from './supabase.js';
 
 const app = express();
 
@@ -20,8 +22,9 @@ app.set('trust proxy', 1); // behind Render's proxy
 app.use(cors({ origin: (origin, cb) => cb(null, allowedOrigin(origin)) }));
 app.use(express.json({ limit: '1mb' }));
 
+// Memory and queue length are here so an uptime monitor (or a test) can watch them.
 app.get('/health', (_req, res) => {
-  res.json({ ok: true });
+  res.json({ ok: true, rss_mb: rssMb(), heap_mb: Math.round(process.memoryUsage().heapUsed / 1048576), gc: canFreeMemory(), jobs: queuedJobs() });
 });
 
 // Every /api route needs the web app's key, the access code (extension) or an upload token.
@@ -39,27 +42,11 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
 };
 app.use(errorHandler);
 
-// Meetings left mid-pipeline by a previous run can't resume (the temp audio
-// file is gone); mark them failed so they can be retried.
-async function failInterruptedMeetings() {
-  const { data, error } = await supabase
-    .from('meetings')
-    .update({ status: 'failed', error: 'Server restarted while processing. Use POST /api/meetings/:id/retry.' })
-    .in('status', ['uploaded', 'transcribing', 'extracting', 'indexing'])
-    .select('id');
-  if (error) {
-    console.error(`[startup] Could not reach the meetings table: ${error.message}`);
-    console.error('[startup] Did you run server/supabase/migrations/001_init.sql in the Supabase SQL editor?');
-    return;
-  }
-  if (data.length) console.warn(`[startup] Marked ${data.length} interrupted meeting(s) as failed.`);
-}
-
 app.listen(config.port, () => {
   console.log(`Tatva server on http://localhost:${config.port}`);
   if (!SERVER_KEY) console.warn('[startup] TATVA_SERVER_KEY is not set: /api is open to localhost (development mode).');
   if (!config.voiceApiKey) console.warn('[startup] VOICE_LLM_API_KEY is not set: the voice endpoint /v1/chat/completions is disabled.');
-  failInterruptedMeetings();
+  resumeInterruptedMeetings().catch((err) => console.error('[startup] resume failed:', err));
   resumeAttachments().catch(() => {});
   warmUpEmbeddings()
     .then(() => console.log('[startup] Embedding model ready'))

@@ -84,7 +84,7 @@ export default function MeetingsList() {
         ) : meetings.length === 0 ? (
           <EmptyState icon="mic_none" title={query ? 'No meetings match' : 'No meetings yet'} body={query ? 'Try a different word from the title.' : 'Record a meeting with the Tatva extension to get started.'} />
         ) : (
-          meetings.map((m) => <MeetingListRow key={m.id} meeting={m} showSaved onAsk={(x) => router.push(`/talk?meeting=${x.id}`)} />)
+          meetings.map((m) => <MeetingListRow key={m.id} meeting={m} showSaved onAsk={(x) => router.push(`/talk?meeting=${x.id}`)} onRetried={reload} />)
         )}
       </div>
     </div>

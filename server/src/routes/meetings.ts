@@ -5,8 +5,8 @@ import { Router } from 'express';
 import multer from 'multer';
 import { config } from '../config.js';
 import { embed } from '../pipeline/embed.js';
-import { enqueueMeeting } from '../pipeline/process.js';
-import { check, checkRow, supabase } from '../supabase.js';
+import { enqueueMeeting, retryMeeting } from '../pipeline/process.js';
+import { checkRow, supabase } from '../supabase.js';
 
 const uploadDir = path.join(os.tmpdir(), 'tatva-uploads');
 fs.mkdirSync(uploadDir, { recursive: true });
@@ -120,7 +120,7 @@ meetingsRouter.post('/meetings/:id/retry', async (req, res) => {
     res.status(400).json({ error: 'Invalid meeting id.' });
     return;
   }
-  const result = await supabase.from('meetings').select('id, status, audio_path, audio_mime').eq('id', req.params.id).maybeSingle();
+  const result = await supabase.from('meetings').select('id, status, audio_path, audio_mime, warnings').eq('id', req.params.id).maybeSingle();
   if (result.error || !result.data) {
     res.status(result.error ? 500 : 404).json({ error: result.error?.message ?? 'Meeting not found.' });
     return;
@@ -134,15 +134,12 @@ meetingsRouter.post('/meetings/:id/retry', async (req, res) => {
     res.status(409).json({ error: 'No stored audio for this meeting; upload the recording again.' });
     return;
   }
-  const download = await supabase.storage.from(config.audioBucket).download(meeting.audio_path);
-  if (download.error) {
-    res.status(500).json({ error: `Could not fetch stored audio: ${download.error.message}` });
+  try {
+    await retryMeeting(meeting);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     return;
   }
-  const filePath = path.join(uploadDir, `${meeting.id}-retry${path.extname(meeting.audio_path)}`);
-  await fs.promises.writeFile(filePath, Buffer.from(await download.data.arrayBuffer()));
-  check(await supabase.from('meetings').update({ status: 'uploaded', error: null }).eq('id', meeting.id), 'Reset meeting');
-  enqueueMeeting({ meetingId: meeting.id, filePath, mimeType: meeting.audio_mime ?? 'audio/webm', deleteFileWhenDone: true });
   res.status(202).json({ id: meeting.id, status: 'uploaded' });
 });
 

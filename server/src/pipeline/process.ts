@@ -1,10 +1,14 @@
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { config } from '../config.js';
+import { freeMemory, rssMb } from '../memory.js';
 import { check, checkRow, supabase, type MeetingStatus } from '../supabase.js';
 import { buildChunks } from './chunk.js';
 import { embed } from './embed.js';
 import { extractKnowledge, type Knowledge } from './extract.js';
 import { buildMarkdown, createKnowledgeDoc } from './gdoc.js';
+import { runJob } from './jobs.js';
 import { recomputeTimeSaved } from './timesaved-db.js';
 import { transcribe, type Segment } from './transcribe.js';
 
@@ -22,7 +26,8 @@ async function updateMeeting(id: string, patch: Record<string, unknown>) {
 }
 
 async function setStatus(id: string, status: MeetingStatus, extra: Record<string, unknown> = {}) {
-  console.log(`[meeting ${id.slice(0, 8)}] ${status}`);
+  freeMemory(); // drop the previous step's buffers before the next one starts
+  console.log(`[meeting ${id.slice(0, 8)}] ${status} (rss ${rssMb()} MB)`);
   await updateMeeting(id, { status, ...extra });
 }
 
@@ -57,7 +62,7 @@ async function storeAudio(job: MeetingJob, meeting: { audio_path: string | null 
   const audioPath = `${job.meetingId}/recording.${job.mimeType.includes('ogg') ? 'ogg' : 'webm'}`;
   const { error } = await supabase.storage
     .from(config.audioBucket)
-    .upload(audioPath, await fs.promises.readFile(job.filePath), { contentType: job.mimeType, upsert: true });
+    .upload(audioPath, await fs.openAsBlob(job.filePath, { type: job.mimeType }), { contentType: job.mimeType, upsert: true });
   if (error) {
     // Not fatal: the extension also keeps a local copy.
     await addWarning(job.meetingId, `Audio not stored in Supabase Storage: ${error.message}`);
@@ -195,7 +200,12 @@ export async function processMeeting(job: MeetingJob): Promise<void> {
       }
     }
 
-    await setStatus(meetingId, 'ready', { processing_finished_at: new Date().toISOString() });
+    // A successful run clears the "resumed after a restart" markers.
+    const done = checkRow(await supabase.from('meetings').select('warnings').eq('id', meetingId).single(), 'Read warnings');
+    await setStatus(meetingId, 'ready', {
+      processing_finished_at: new Date().toISOString(),
+      warnings: (done.warnings ?? []).filter((w: string) => !w.startsWith(RESUMED)),
+    });
     console.log(`[meeting ${meetingId.slice(0, 8)}] done in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`);
   } catch (err) {
     console.error(`[meeting ${meetingId.slice(0, 8)}] failed:`, err);
@@ -207,8 +217,75 @@ export async function processMeeting(job: MeetingJob): Promise<void> {
   }
 }
 
-// One meeting at a time keeps Groq rate limits and memory predictable.
-let queue: Promise<void> = Promise.resolve();
+// One job at a time across the server (see jobs.ts).
 export function enqueueMeeting(job: MeetingJob): void {
-  queue = queue.then(() => processMeeting(job));
+  runJob(`meeting ${job.meetingId.slice(0, 8)}`, () => processMeeting(job));
+}
+
+// ---- retry and resume ------------------------------------------------------------------
+
+export const PROCESSING_STATUSES = ['uploaded', 'transcribing', 'extracting', 'indexing'] as const;
+const RESUMED = 'Resumed after a server restart';
+/** A meeting that keeps taking the server down stops resuming itself after this many tries. */
+const MAX_RESUMES = 2;
+const workDir = path.join(os.tmpdir(), 'tatva-uploads');
+
+interface StoredMeeting {
+  id: string;
+  audio_path: string | null;
+  audio_mime: string | null;
+  warnings?: string[] | null;
+}
+
+/** Downloads the stored recording and queues the meeting again from the start (each step is idempotent). */
+export async function requeueFromStorage(meeting: StoredMeeting, patch: Record<string, unknown> = {}): Promise<void> {
+  if (!meeting.audio_path) throw new Error('No stored audio for this meeting; upload the recording again.');
+  const download = await supabase.storage.from(config.audioBucket).download(meeting.audio_path);
+  if (download.error) throw new Error(`Could not fetch stored audio: ${download.error.message}`);
+  await fs.promises.mkdir(workDir, { recursive: true });
+  const filePath = path.join(workDir, `${meeting.id}-retry${path.extname(meeting.audio_path)}`);
+  await fs.promises.writeFile(filePath, Buffer.from(await download.data.arrayBuffer()));
+  await updateMeeting(meeting.id, { status: 'uploaded', error: null, processing_finished_at: null, ...patch });
+  enqueueMeeting({ meetingId: meeting.id, filePath, mimeType: meeting.audio_mime ?? 'audio/webm', deleteFileWhenDone: true });
+}
+
+/** Manual retry of a failed meeting: fresh resume budget. */
+export async function retryMeeting(meeting: StoredMeeting): Promise<void> {
+  await requeueFromStorage(meeting, { warnings: (meeting.warnings ?? []).filter((w) => !w.startsWith(RESUMED)) });
+}
+
+/**
+ * On startup: meetings a previous run left mid-pipeline (a restart, a deploy or
+ * running out of memory) are processed again from their stored audio. A meeting
+ * that was interrupted MAX_RESUMES times is marked failed instead, so one bad
+ * recording can't keep restarting the server.
+ */
+export async function resumeInterruptedMeetings(): Promise<void> {
+  const { data, error } = await supabase
+    .from('meetings')
+    .select('id, audio_path, audio_mime, warnings')
+    .in('status', [...PROCESSING_STATUSES])
+    .order('created_at', { ascending: true });
+  if (error) {
+    console.error(`[startup] Could not reach the meetings table: ${error.message}`);
+    console.error('[startup] Did you run server/supabase/migrations/001_init.sql in the Supabase SQL editor?');
+    return;
+  }
+  for (const meeting of data ?? []) {
+    const short = meeting.id.slice(0, 8);
+    const warnings: string[] = meeting.warnings ?? [];
+    const resumes = warnings.filter((w) => w.startsWith(RESUMED)).length;
+    try {
+      if (!meeting.audio_path) {
+        await setStatus(meeting.id, 'failed', { error: 'The server restarted before the recording was saved. Upload it again from the extension.' });
+      } else if (resumes >= MAX_RESUMES) {
+        await setStatus(meeting.id, 'failed', { error: `Processing was interrupted ${resumes + 1} times by server restarts. Press Retry to try again.` });
+      } else {
+        console.warn(`[startup] resuming meeting ${short} (attempt ${resumes + 2})`);
+        await requeueFromStorage(meeting, { warnings: [...warnings, `${RESUMED} (${new Date().toISOString()})`] });
+      }
+    } catch (err) {
+      await setStatus(meeting.id, 'failed', { error: `Could not resume after a restart: ${errorMessage(err)}. Press Retry.` }).catch(() => {});
+    }
+  }
 }

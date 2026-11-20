@@ -18,7 +18,9 @@ services:
     # here so the first start doesn't fetch ~90 MB.
     buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm build && pnpm run prefetch:model
     # Same as `pnpm start`, minus the pnpm wrapper process (~40 MB less RAM).
-    startCommand: node --enable-source-maps dist/index.js
+    # --expose-gc + a 256 MB heap cap: V8 collects (and the pipeline frees memory
+    # between steps) long before the 512 MB container limit.
+    startCommand: node --enable-source-maps --expose-gc --max-old-space-size=256 dist/index.js
     healthCheckPath: /health
     autoDeploy: true
     envVars:

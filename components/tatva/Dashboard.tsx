@@ -62,7 +62,47 @@ export function StatusPill({ meeting }: { meeting: MeetingRow }) {
   );
 }
 
-export function MeetingListRow({ meeting, onAsk, showSaved = false }: { meeting: MeetingRow; onAsk: (m: MeetingRow) => void; showSaved?: boolean }) {
+/** Re-runs a failed meeting from its stored recording (POST /meetings/:id/retry). */
+export function RetryMeetingButton({ meetingId, onRetried, className = '' }: { meetingId: string; onRetried: () => void; className?: string }) {
+  const { toast } = useTatvaUi();
+  const [busy, setBusy] = useState(false);
+  const retry = async () => {
+    setBusy(true);
+    try {
+      await api(`/meetings/${meetingId}/retry`, { method: 'POST' });
+      toast('Processing the recording again. This takes a minute or two.', 'success');
+      onRetried();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={retry}
+      disabled={busy}
+      aria-busy={busy}
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-hairline bg-surface-container-high px-3 py-1 font-label-md text-caption text-on-surface hover:border-hairline-strong hover:bg-surface-bright ${className}`}
+    >
+      {busy ? <Spinner /> : <Icon name="refresh" className="text-sm text-on-surface-variant" />}
+      <span>{busy ? 'Retrying…' : 'Retry'}</span>
+    </button>
+  );
+}
+
+export function MeetingListRow({
+  meeting,
+  onAsk,
+  onRetried,
+  showSaved = false,
+}: {
+  meeting: MeetingRow;
+  onAsk: (m: MeetingRow) => void;
+  onRetried: () => void;
+  showSaved?: boolean;
+}) {
   const processing = PROCESSING.includes(meeting.status);
   const body = (
     <div className="flex min-w-0 items-start gap-space-sm">
@@ -130,6 +170,7 @@ export function MeetingListRow({ meeting, onAsk, showSaved = false }: { meeting:
             <span>Ask Tatva</span>
           </button>
         )}
+        {meeting.status === 'failed' && <RetryMeetingButton meetingId={meeting.id} onRetried={onRetried} />}
         <StatusPill meeting={meeting} />
       </div>
     </div>
@@ -277,7 +318,7 @@ export default function Dashboard() {
               ) : data.meetings.length === 0 ? (
                 <EmptyState icon="mic_none" title="No meetings yet" body="Record a Google Meet or Teams call with the Tatva extension and it appears here." />
               ) : (
-                data.meetings.slice(0, 5).map((m) => <MeetingListRow key={m.id} meeting={m} onAsk={askAbout} />)
+                data.meetings.slice(0, 5).map((m) => <MeetingListRow key={m.id} meeting={m} onAsk={askAbout} onRetried={reload} />)
               )}
             </div>
           </section>
