@@ -9,7 +9,7 @@
 //              server as x-tatva-access-code (not needed for local).
 
 const TATVA_PRESETS = {
-  cloud: { serverUrl: 'https://tatva-server.onrender.com', webUrl: 'https://tatva-work.vercel.app' },
+  cloud: { serverUrl: 'https://tatva-server-iu7c.onrender.com', webUrl: 'https://tatva-work.vercel.app' },
   local: { serverUrl: 'http://localhost:4000', webUrl: 'http://localhost:3000' },
 };
 

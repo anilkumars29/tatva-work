@@ -47,7 +47,7 @@ calls to `/v1` time out, so Pooja would go silent mid-demo. A request every
 5 minutes counts as traffic and keeps it awake:
 
 1. Sign up at <https://uptimerobot.com> (free, no card) → **+ New monitor**.
-2. Type **HTTP(s)**, URL `https://tatva-server.onrender.com/health`, interval
+2. Type **HTTP(s)**, URL `https://tatva-server-iu7c.onrender.com/health`, interval
    **5 minutes** (the free tier's minimum) → **Create monitor**.
 3. Check it shows **Up** and Render's **Logs** show `GET /health` every 5 minutes.
 
@@ -92,7 +92,7 @@ This creates two gitignored files and prints which variables are filled (never v
    Tip: after creation, **tatva-server → Environment → Add from .env** accepts the
    whole `server/.env.render` file at once.
 4. **Apply**. The first build takes ~4–6 minutes (install, `tsc`, model download).
-5. Note the URL at the top of the service page (e.g. `https://tatva-server.onrender.com`).
+5. Note the URL at the top of the service page (e.g. `https://tatva-server-iu7c.onrender.com`).
    Check: open `<url>/health` → `{"ok":true}`. If the name differs, put it in
    `.env.deploy` (`RENDER_URL`) and re-run step 0.
 
@@ -136,7 +136,7 @@ Framework **Next.js**, Root Directory **./** → **Environment Variables**: add 
 
 ## 3. Chrome extension
 
-1. `chrome://extensions` → **Tatva Recorder** → reload (version **0.5.0**).
+1. `chrome://extensions` → **Tatva Recorder** → reload (version **0.5.1**).
 2. Click the extension → the **gear icon** → **Cloud** → paste the access code →
    **Save**. It tests the connection ("Connected").
    (**Local** = `localhost:4000`; **Custom** = any other server/web URL, Chrome asks

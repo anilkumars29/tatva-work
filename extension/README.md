@@ -25,7 +25,7 @@ No build step: plain JavaScript, load the folder unpacked. Requires Chrome 116+.
 
 ### Reloading after an update
 
-After pulling changes (current version **0.5.0**): open `chrome://extensions`,
+After pulling changes (current version **0.5.1**): open `chrome://extensions`,
 find **Tatva Recorder** and press its reload icon (or *Load unpacked* → this
 `extension/` folder if it isn't installed). Then reload the Tatva web app tab
 (`http://localhost:3000`): content scripts only attach to pages loaded after

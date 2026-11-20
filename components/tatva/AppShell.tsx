@@ -18,7 +18,7 @@ const NAV = [
 ];
 
 /** The version this repo's extension/ folder is at; older installs are asked to reload. */
-const EXTENSION_VERSION = '0.5.0';
+const EXTENSION_VERSION = '0.5.1';
 
 const CONNECTIONS: { key: string; label: string; icon: string }[] = [
   { key: 'gmail', label: 'Gmail', icon: 'mail' },

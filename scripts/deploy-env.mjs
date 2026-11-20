@@ -39,7 +39,7 @@ function ensureDeploy() {
   const next = {
     TATVA_SERVER_KEY: d.TATVA_SERVER_KEY || randomBytes(32).toString('base64url'),
     TATVA_ACCESS_CODE: d.TATVA_ACCESS_CODE || accessCode(),
-    RENDER_URL: (d.RENDER_URL || 'https://tatva-server.onrender.com').replace(/\/$/, ''),
+    RENDER_URL: (d.RENDER_URL || 'https://tatva-server-iu7c.onrender.com').replace(/\/$/, ''),
     VERCEL_URL: (d.VERCEL_URL || 'https://tatva-work.vercel.app').replace(/\/$/, ''),
   };
   writeEnv(DEPLOY, next, '# Deployment values (gitignored). Same TATVA_SERVER_KEY and TATVA_ACCESS_CODE on Render and Vercel.');

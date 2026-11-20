@@ -59,6 +59,6 @@ test('the web app sees the extension', async () => {
   }
   await expect(page.locator('aside').getByText('Extension connected')).toBeVisible({ timeout: 20_000 });
   const version = await page.evaluate(() => document.documentElement.dataset.tatvaExtension);
-  expect(version).toBe('0.5.0');
+  expect(version).toBe('0.5.1');
   await page.close();
 });
