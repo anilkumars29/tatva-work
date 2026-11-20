@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { config } from '../config.js';
+import { AllModelsBusyError } from '../llm.js';
 import { freeMemory, rssMb } from '../memory.js';
 import { check, checkRow, supabase, type MeetingStatus } from '../supabase.js';
 import { buildChunks } from './chunk.js';
@@ -28,7 +29,20 @@ async function updateMeeting(id: string, patch: Record<string, unknown>) {
 async function setStatus(id: string, status: MeetingStatus, extra: Record<string, unknown> = {}) {
   freeMemory(); // drop the previous step's buffers before the next one starts
   console.log(`[meeting ${id.slice(0, 8)}] ${status} (rss ${rssMb()} MB)`);
-  await updateMeeting(id, { status, ...extra });
+  // While processing, `error` holds a short progress note ("AI service busy…"); a new step clears it.
+  await updateMeeting(id, { status, ...(status === 'failed' ? {} : { error: null }), ...extra });
+}
+
+/** What the user sees for a failure: plain words, not an API's JSON. */
+export function friendlyError(err: unknown): string {
+  if (err instanceof AllModelsBusyError) {
+    const minutes = Math.max(1, Math.ceil(err.retryInMs / 60_000));
+    return `AI service busy: every AI model hit its usage limit. Press Retry in about ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+  }
+  const message = errorMessage(err);
+  if (/\b429\b|rate limit/i.test(message)) return 'AI service busy (usage limit reached). Press Retry in a few minutes.';
+  if (/groq|\b5\d\d\b|fetch failed|ECONNRESET|ETIMEDOUT/i.test(message)) return 'The AI service had a problem processing this meeting. Press Retry.';
+  return message.length > 240 ? `${message.slice(0, 240)}…` : message;
 }
 
 async function addWarning(id: string, warning: string) {
@@ -172,12 +186,22 @@ export async function processMeeting(job: MeetingJob): Promise<void> {
     // 3. Extract structured knowledge.
     await setStatus(meetingId, 'extracting');
     const recordedAt = new Date(meeting.recorded_at ?? meeting.created_at);
-    const knowledge = await extractKnowledge(transcript.segments, {
-      recordedAt,
-      recordedAtLocal: dateTimeLabel(recordedAt),
-      durationMinutes: durationSeconds / 60,
-      sourceTitle: meeting.source_title,
-    });
+    const note = (error: string) => void updateMeeting(meetingId, { error }).catch(() => {});
+    const knowledge = await extractKnowledge(
+      transcript.segments,
+      {
+        recordedAt,
+        recordedAtLocal: dateTimeLabel(recordedAt),
+        durationMinutes: durationSeconds / 60,
+        sourceTitle: meeting.source_title,
+      },
+      {
+        hooks: {
+          onSwitch: (_from, to) => note(to ? 'AI service busy, retrying with another model' : 'AI service busy, waiting for a model to free up'),
+          onWait: () => note('AI service busy, retrying in a moment'),
+        },
+      },
+    );
     await saveKnowledge(meetingId, knowledge, transcript.segments);
     // Time saved = notes for this length + each captured item (+ actions run later).
     const timeSaved = (await recomputeTimeSaved(meetingId)) ?? { minutes: 0, breakdown: [] };
@@ -209,7 +233,8 @@ export async function processMeeting(job: MeetingJob): Promise<void> {
     console.log(`[meeting ${meetingId.slice(0, 8)}] done in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`);
   } catch (err) {
     console.error(`[meeting ${meetingId.slice(0, 8)}] failed:`, err);
-    await setStatus(meetingId, 'failed', { error: errorMessage(err), processing_finished_at: new Date().toISOString() }).catch(
+    await addWarning(meetingId, `Failure detail: ${errorMessage(err).slice(0, 600)}`).catch(() => {});
+    await setStatus(meetingId, 'failed', { error: friendlyError(err), processing_finished_at: new Date().toISOString() }).catch(
       (e) => console.error('Could not record failure', e),
     );
   } finally {
@@ -225,7 +250,8 @@ const HEARTBEAT_MS = 20_000;
 setInterval(() => {
   if (!active.size) return;
   // Only rows still processing, so it never clears a failure's error message.
-  supabase.from('meetings').update({ error: null }).in('id', [...active]).in('status', [...PROCESSING_STATUSES]).then(({ error }) => {
+  // Touch updated_at only: `error` may hold a progress note.
+  supabase.from('meetings').update({ updated_at: new Date().toISOString() }).in('id', [...active]).in('status', [...PROCESSING_STATUSES]).then(({ error }) => {
     if (error) console.warn(`[meetings] heartbeat failed: ${error.message}`);
   });
 }, HEARTBEAT_MS).unref();

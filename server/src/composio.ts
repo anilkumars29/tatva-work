@@ -25,7 +25,7 @@ export async function isToolkitConnected(toolkit: string): Promise<boolean> {
 }
 
 const RETRY_DELAYS_MS = [3000, 8000];
-const isQuotaError = (message: string) => /quota exceeded|rate.?limit|too many requests|429|userRateLimitExceeded/i.test(message);
+const isQuotaError = (message: string) => /quota exceeded|rate.?limit|too many requests|\b429\b|userRateLimitExceeded/i.test(message);
 
 /**
  * Runs a Composio tool and returns its `data`, throwing on failure. Google

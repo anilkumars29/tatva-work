@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { config } from '../config.js';
-import { groqPost } from '../groq.js';
+import { chatWithFallback, reasoningFor, type FallbackHooks } from '../llm.js';
 import { neutralize, UNTRUSTED_RULE } from '../voice/untrusted.js';
+import { cleanOwner } from './owners.js';
 import { fixDateTime, fixDueDate, zoneOffset } from './dates.js';
 import { formatTimestamp, type Segment } from './transcribe.js';
 
@@ -115,16 +116,22 @@ function completionBudget(system: string, user: string): number {
   return Math.max(1024, Math.min(config.llmMaxCompletionTokens, fits));
 }
 
-async function callLlmOnce(system: string, user: string, reasoningEffort = config.llmReasoningEffort): Promise<Knowledge> {
+export interface ExtractOptions {
+  /** Model chain; defaults to config.extractModels. */
+  models?: string[];
+  /** Told when a model is rate-limited and another is tried. */
+  hooks?: FallbackHooks;
+}
+
+async function callLlmOnce(system: string, user: string, opts: ExtractOptions, reasoningEffort = config.llmReasoningEffort): Promise<Knowledge> {
   const maxCompletionTokens = completionBudget(system, user);
-  const response = (await groqPost('/chat/completions', () => ({
-    json: true,
-    body: JSON.stringify({
-      model: config.llmModel,
+  const { data: response, model } = await chatWithFallback<{ choices: { message: { content: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } }>(
+    opts.models ?? config.extractModels,
+    (m) => ({
       temperature: 0,
       // gpt-oss spends part of the budget on reasoning; leave room for the JSON.
       max_completion_tokens: maxCompletionTokens,
-      reasoning_effort: reasoningEffort,
+      ...reasoningFor(m, reasoningEffort),
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user },
@@ -134,7 +141,9 @@ async function callLlmOnce(system: string, user: string, reasoningEffort = confi
         json_schema: { name: 'meeting_knowledge', strict: true, schema: jsonSchema },
       },
     }),
-  }))) as { choices: { message: { content: string } }[] };
+    opts.hooks,
+  );
+  console.log(`[extract] ${model}: ${response.usage?.prompt_tokens ?? '?'} in + ${response.usage?.completion_tokens ?? '?'} out tokens`);
 
   const content = response.choices?.[0]?.message?.content;
   if (!content) throw new Error('LLM returned an empty response.');
@@ -144,14 +153,14 @@ async function callLlmOnce(system: string, user: string, reasoningEffort = confi
 // Structured output occasionally fails validation, usually because reasoning
 // used up the output budget and the JSON was cut off (a meeting with many
 // action items). The retry reasons less, leaving the budget for the answer.
-async function callLlm(system: string, user: string): Promise<Knowledge> {
+async function callLlm(system: string, user: string, opts: ExtractOptions): Promise<Knowledge> {
   try {
-    return await callLlmOnce(system, user);
+    return await callLlmOnce(system, user, opts);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (!/json_validate_failed|max completion tokens|JSON|ZodError|invalid_type/i.test(message)) throw err;
     console.warn(`[extract] invalid structured output, retrying once with low reasoning: ${message.slice(0, 160)}`);
-    return callLlmOnce(system, user, 'low');
+    return callLlmOnce(system, user, opts, 'low');
   }
 }
 
@@ -200,13 +209,13 @@ export interface MeetingMeta {
   sourceTitle: string | null;
 }
 
-export async function extractKnowledge(segments: Segment[], meta: MeetingMeta): Promise<Knowledge> {
+export async function extractKnowledge(segments: Segment[], meta: MeetingMeta, opts: ExtractOptions = {}): Promise<Knowledge> {
   const system = systemPrompt(meta);
   const parts = splitSegments(segments, config.llmMaxTranscriptChars);
 
   let knowledge: Knowledge;
   if (parts.length === 1) {
-    knowledge = await callLlm(system, `Transcript:\n${transcriptLines(segments)}`);
+    knowledge = await callLlm(system, `Transcript:\n${transcriptLines(segments)}`, opts);
   } else {
     // Long meeting: extract each part, then merge the partial results.
     const partials: Knowledge[] = [];
@@ -216,6 +225,7 @@ export async function extractKnowledge(segments: Segment[], meta: MeetingMeta): 
         await callLlm(
           system,
           `This is part ${i + 1} of ${parts.length} of a longer meeting. Extract only what is in this part.\n\nTranscript:\n${transcriptLines(part)}`,
+          opts,
         ),
       );
     }
@@ -223,6 +233,7 @@ export async function extractKnowledge(segments: Segment[], meta: MeetingMeta): 
     knowledge = await callLlm(
       system,
       `Below are structured extractions from consecutive parts of ONE meeting, in order. Merge them into a single result for the whole meeting: one title and summary, deduplicated decisions / action items / stats / discuss-later items, and the 3-8 most important key moments. Keep timestamps as given.\n\n<data>\n${neutralize(JSON.stringify(partials))}\n</data>`,
+      opts,
     );
   }
 
@@ -230,6 +241,7 @@ export async function extractKnowledge(segments: Segment[], meta: MeetingMeta): 
   // every discuss-later item has a usable suggested date/time.
   for (const item of knowledge.action_items) {
     item.due_date = fixDueDate(item.due_date, item.due, meta.recordedAt);
+    item.owner = cleanOwner(item.owner);
   }
   for (const item of knowledge.discuss_later) {
     item.suggested_datetime = fixDateTime(item.suggested_datetime, item.suggested_time, meta.recordedAt);

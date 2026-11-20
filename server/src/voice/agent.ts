@@ -1,6 +1,7 @@
 // One voice turn: context (RAG + memory + pending action) -> Groq with tools ->
 // spoken text, yielded piece by piece so the route can stream it to Agora.
 import { config } from '../config.js';
+import { isAvailable, markRateLimited, msUntilAvailable, recordSuccess } from '../llm.js';
 import { localYmd } from '../pipeline/dates.js';
 import { cancelPending, executePending, getPending, isActionKind, proposeAction, UserFacingError, type PendingAction } from './actions.js';
 import { logActivity } from './activity.js';
@@ -106,19 +107,23 @@ function textOf(content: unknown): string {
   return '';
 }
 
-const MODELS = [config.voiceModel, ...(process.env.VOICE_LLM_FALLBACK_MODELS ?? 'openai/gpt-oss-20b').split(',').map((s) => s.trim())].filter(
-  (m, i, all) => m && all.indexOf(m) === i,
-);
+// Voice chain (config.voiceModels): gpt-oss-120b first, then the others.
+// Extraction prefers other models, so processing can't drain Pooja's budget.
+const MODELS = config.voiceModels;
 
 /**
- * One Groq completion (streamed, assembled here). Tries each model in turn on
- * rate limits; if all are limited, returns how long to wait instead.
+ * One Groq completion (streamed, assembled here). Tries each model in turn,
+ * skipping models the shared limit state (llm.ts) knows are out; if all are
+ * limited, returns how long to wait instead.
  */
 async function groqRound(messages: ChatMessage[], signal: AbortSignal, tools: unknown[]): Promise<ChatMessage | { retryAfterMs: number }> {
   let response: Response | null = null;
   let lastError = '';
   let retryAfterMs = Infinity;
+  let usedModel = '';
   for (const model of MODELS) {
+    if (!isAvailable(model)) continue;
+    usedModel = model;
     response = await fetch(GROQ_URL, {
       method: 'POST',
       signal,
@@ -132,6 +137,8 @@ async function groqRound(messages: ChatMessage[], signal: AbortSignal, tools: un
         temperature: 0.3,
         max_completion_tokens: config.voiceMaxTokens,
         ...(model.startsWith('openai/gpt-oss') ? { reasoning_effort: config.voiceReasoningEffort, include_reasoning: false } : {}),
+        // Qwen3 thinks by default; a voice reply must not include its reasoning.
+        ...(model.startsWith('qwen/') ? { reasoning_format: 'hidden' } : {}),
       }),
     });
     if (response.ok) break;
@@ -139,15 +146,19 @@ async function groqRound(messages: ChatMessage[], signal: AbortSignal, tools: un
     lastError = `${model} ${response.status}: ${body.slice(0, 300)}`;
     console.warn(`[voice] Groq ${lastError}`);
     if (response.status === 429) {
-      const seconds = Number(response.headers.get('retry-after')) || Number(body.match(/try again in ([\d.]+)s/)?.[1]) || 5;
-      retryAfterMs = Math.min(retryAfterMs, seconds * 1000);
+      const { kind, waitMs } = markRateLimited(model, body, response.headers.get('retry-after'));
+      // A daily limit won't clear in a few seconds: only per-minute waits count.
+      if (kind === 'minute') retryAfterMs = Math.min(retryAfterMs, waitMs);
     } else if (response.status < 500) break;
     response = null;
   }
+  // Every voice model is known to be out: report the wait (the turn says "one moment" or apologises).
+  if (!usedModel) return { retryAfterMs: msUntilAvailable(MODELS) || 5000 };
   if (!response && Number.isFinite(retryAfterMs)) return { retryAfterMs };
   if (!response?.ok || !response.body) throw new Error(`Groq failed: ${lastError}`);
 
   let content = '';
+  let usage: { total_tokens?: number } | undefined;
   const calls: ToolCall[] = [];
   const decoder = new TextDecoder();
   let buffer = '';
@@ -163,6 +174,7 @@ async function groqRound(messages: ChatMessage[], signal: AbortSignal, tools: un
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const chunk: any = JSON.parse(payload);
       if (chunk.error) throw new Error(`Groq stream error: ${JSON.stringify(chunk.error).slice(0, 300)}`);
+      if (chunk.x_groq?.usage) usage = chunk.x_groq.usage;
       const delta = chunk.choices?.[0]?.delta ?? {};
       if (typeof delta.content === 'string' && delta.content) {
         content += delta.content;
@@ -175,6 +187,7 @@ async function groqRound(messages: ChatMessage[], signal: AbortSignal, tools: un
       }
     }
   }
+  recordSuccess(usedModel, usage, response.headers);
   const toolCalls = calls.filter(Boolean).map((c, i) => ({ ...c, id: c.id || `call_${i}` }));
   return { role: 'assistant', content: content || null, ...(toolCalls.length ? { tool_calls: toolCalls } : {}) };
 }

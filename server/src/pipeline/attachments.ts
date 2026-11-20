@@ -7,7 +7,7 @@
 // refreshed with an "Attachments" section.
 import sharp from 'sharp';
 import { config } from '../config.js';
-import { groqPost } from '../groq.js';
+import { chatWithFallback } from '../llm.js';
 import { check, supabase } from '../supabase.js';
 import { attachmentCitation } from './citation.js';
 import { pdfPages, summarize } from './documents.js';
@@ -55,10 +55,8 @@ async function prepareImage(bytes: Buffer): Promise<{ dataUrl: string }> {
 
 async function readImage(bytes: Buffer, name: string, meetingTitle: string): Promise<{ label: ImageLabel; text: string; description: string; summary: string }> {
   const { dataUrl } = await prepareImage(bytes);
-  const data = (await groqPost('/chat/completions', () => ({
-    json: true,
-    body: JSON.stringify({
-      model: config.visionModel,
+  // The one vision model, through the shared limit handling (switching is not possible, waiting is).
+  const { data } = await chatWithFallback<{ choices: { message: { content: string } }[] }>([config.visionModel], () => ({
       max_completion_tokens: 2500,
       temperature: 0.1,
       response_format: { type: 'json_object' },
@@ -72,8 +70,7 @@ async function readImage(bytes: Buffer, name: string, meetingTitle: string): Pro
           ],
         },
       ],
-    }),
-  }))) as { choices: { message: { content: string } }[] };
+  }));
   const raw = data.choices?.[0]?.message?.content ?? '';
   let parsed: Record<string, unknown> = {};
   try {

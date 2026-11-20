@@ -601,3 +601,28 @@ export async function trackerSheetUrl(): Promise<string> {
   return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
 }
 
+
+/**
+ * Deletes the tracker sheet rows whose Meeting column is `meetingTitle`
+ * (deleting a meeting). Rows are removed bottom-up so indexes stay valid.
+ */
+export async function deleteTrackerRows(meetingTitle: string): Promise<number> {
+  const { spreadsheetId, tab } = await trackerSheet();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data: any = await executeTool('googlesheets', 'GOOGLESHEETS_BATCH_GET', { spreadsheet_id: spreadsheetId, ranges: [`'${tab}'!A:G`] });
+  const rows = (data?.valueRanges?.[0]?.values ?? []) as string[][];
+  const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const want = norm(meetingTitle);
+  const matches = rows.map((row, i) => (i > 0 && want && norm(row?.[4] ?? '') === want ? i : -1)).filter((i) => i > 0);
+  for (const index of matches.reverse()) {
+    await executeTool('googlesheets', 'GOOGLESHEETS_DELETE_DIMENSION', {
+      spreadsheet_id: spreadsheetId,
+      sheet_name: tab,
+      dimension: 'ROWS',
+      start_index: index,
+      end_index: index + 1,
+    });
+  }
+  taskColumn = null; // row numbers changed
+  return matches.length;
+}

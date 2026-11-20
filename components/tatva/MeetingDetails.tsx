@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApi } from '@/hooks/use-api';
-import { api, clock, dueLabel, durationLabel, eventDateTime, initials, minutesLabel, plural, relativeDateTime } from '@/lib/tatva';
+import { api, clock, dueLabel, durationLabel, eventDateTime, initials, meetingErrorText, minutesLabel, plural, relativeDateTime } from '@/lib/tatva';
 import type { Contact, MeetingDetail } from './types';
 import { MeetingAttachments } from './Attachments';
 import { RetryMeetingButton } from './Dashboard';
@@ -279,6 +280,7 @@ export default function MeetingDetails({ id }: { id: string }) {
                   {ready ? 'Ready' : m.status === 'failed' ? 'Failed' : m.status}
                 </span>
               </div>
+              <MeetingMoreMenu meetingId={m.id} title={title} processing={!ready && m.status !== 'failed'} />
             </div>
             <p className="font-body-md text-body-md text-on-surface-variant">
               {[relativeDateTime(m.recorded_at ?? m.created_at), durationLabel(m.duration_seconds), plural(m.action_items.length, 'action item')].filter(Boolean).join(' · ')}
@@ -313,7 +315,7 @@ export default function MeetingDetails({ id }: { id: string }) {
         {!ready && (
           <div className="flex items-center gap-space-sm rounded-xl bg-surface-container-low p-space-md text-on-surface-variant border border-hairline">
             {m.status === 'failed' ? <Icon name="error" className="text-error" /> : <Spinner />}
-            <span className="min-w-0 flex-1 font-body-md text-body-md">{m.status === 'failed' ? `Processing failed: ${m.error ?? 'unknown error'}` : `Processing: ${m.status}… this page updates automatically.`}</span>
+            <span className="min-w-0 flex-1 font-body-md text-body-md">{m.status === 'failed' ? `Processing failed: ${meetingErrorText(m.error)}` : `Processing: ${m.status}${m.error ? ` · ${m.error}` : ''}… this page updates automatically.`}</span>
             {m.status === 'failed' && m.audio_path && <RetryMeetingButton meetingId={m.id} onRetried={reload} className="shrink-0 py-space-sm" />}
           </div>
         )}
@@ -753,6 +755,78 @@ function MeetingSkeleton() {
           <Skeleton className="h-64 w-full rounded-xl" />
         </div>
       </div>
+    </div>
+  );
+}
+
+/** "…" menu on the meeting page: rarely used, destructive actions stay out of the main row. */
+function MeetingMoreMenu({ meetingId, title, processing }: { meetingId: string; title: string; processing: boolean }) {
+  const { confirm } = useTatvaUi();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const remove = () => {
+    setOpen(false);
+    confirm({
+      title: 'Delete meeting',
+      icon: 'delete',
+      tone: 'danger',
+      confirmLabel: 'Delete meeting',
+      body: (
+        <>
+          Delete <strong className="text-on-surface">&ldquo;{title}&rdquo;</strong> permanently? This removes its recording, transcript, action items,
+          follow-ups, attachments, search index, rows in the Tatva Tracker sheet and its activity, and moves its Google Doc to the Drive trash.
+          This can&rsquo;t be undone.
+        </>
+      ),
+      run: async () => {
+        const r = await api<{ deleted: { tracker_rows_deleted: number; google_doc: string; warnings: string[] } }>(`/meetings/${meetingId}`, { method: 'DELETE' });
+        router.push('/meetings');
+        const extra = r.deleted.warnings.length ? ` (${r.deleted.warnings[0]})` : '';
+        return `Deleted "${title}".${extra}`;
+      },
+    });
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-label="More actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+      >
+        <Icon name="more_horiz" className="text-headline-sm" />
+      </button>
+      {open && (
+        <div role="menu" className="animate-pop absolute left-0 top-10 z-50 w-56 overflow-hidden rounded-xl border border-hairline bg-surface-container-low py-1 shadow-popover">
+          <button
+            type="button"
+            role="menuitem"
+            onClick={remove}
+            disabled={processing}
+            title={processing ? 'Wait until processing finishes' : undefined}
+            className="flex w-full items-center gap-space-sm px-space-md py-2 text-left font-label-md text-label-md text-error hover:bg-error-container/30"
+          >
+            <Icon name="delete" className="text-body-lg" />
+            <span>Delete meeting</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

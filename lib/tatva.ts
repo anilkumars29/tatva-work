@@ -171,3 +171,14 @@ export async function uploadTarget(): Promise<{ url: (path: string) => string; h
   const { base, token } = uploadCache;
   return { url: (path) => `${base}${path}`, headers: token ? { 'x-tatva-upload': token } : {} };
 }
+
+/**
+ * A meeting's error in plain words. New failures are already readable (the
+ * server writes them); older rows may hold an API's raw JSON.
+ */
+export function meetingErrorText(error: string | null | undefined): string {
+  if (!error) return 'Processing failed';
+  if (/\b429\b|rate limit/i.test(error)) return 'AI service busy (usage limit reached). Press Retry in a few minutes.';
+  if (/^Groq |"error":\s*\{/.test(error)) return 'The AI service had a problem processing this meeting. Press Retry.';
+  return error;
+}

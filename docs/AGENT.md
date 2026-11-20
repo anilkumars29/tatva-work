@@ -307,8 +307,11 @@ Implemented, with where to find them:
 - Attachment and document hits carry a server-made label (`attachmentCitation()` in `pipeline/citation.ts`, `searchKnowledge()` `titleOf()`), e.g. `the slide "Pricing.png" shared in Q4 Vendor Review`; the prompt requires answers to begin with it. Unit-tested in `server/test/citation.test.ts`.
 
 ### Retries, fallbacks and rate limits
-- Groq (`server/src/groq.ts` `groqPost()`): up to 5 attempts on 429/5xx, honouring `retry-after`, exponential backoff; no retry for "request too large". Extraction sizes its output budget to fit the 8,000 tokens-per-minute free tier (`completionBudget()`) and splits long transcripts.
-- Voice (`groqRound()`): on a 429, tries the fallback model; if all are limited, says "One moment." and waits once (up to 12 s). A schema-rejected tool call (`tool_use_failed`) is regenerated once. At most 4 model rounds per turn.
+- Groq limits each model separately (free tier: 8k tokens and 30 requests per minute, 200k tokens and 1k requests per day). `server/src/llm.ts` `chatWithFallback()` runs a model chain with shared per-model state: a per-day 429 (TPD/RPD) switches to the next model at once; a per-minute 429 waits up to 20 s and retries; when every model is out it waits up to 4 minutes for the first to free up, then fails with `AllModelsBusyError`. The voice loop reads the same state, so neither path calls a model known to be out.
+- Chains (`config.ts`): extraction `qwen/qwen3.8-27b` → `openai/gpt-oss-20b` (reasoning low), never the voice model; voice `openai/gpt-oss-120b` → `openai/gpt-oss-20b` → `qwen/qwen3.8-27b`. Override with `LLM_EXTRACT_MODELS` / `VOICE_LLM_MODEL` + `VOICE_LLM_FALLBACK_MODELS`. `/health` shows the chains and each model's limit state.
+- Whisper transcription still uses `groqPost()` (5 attempts on 429/5xx with `retry-after`). Extraction sizes its output budget to fit the per-minute limit (`completionBudget()`) and splits long transcripts.
+- Voice (`groqRound()`): if all voice models are limited, says "One moment." and waits once (up to 12 s). A schema-rejected tool call (`tool_use_failed`) is regenerated once. At most 4 model rounds per turn.
+- Users see plain words: "AI service busy, retrying with another model" while processing (`error` holds the progress note), and `friendlyError()` for failures; the raw detail goes to the meeting's `warnings`.
 - Composio (`executeTool()`): Google quota/rate-limit errors retried twice (3 s, 8 s).
 - Meeting processing: one job at a time; restarts resume abandoned meetings from stored audio (heartbeat + atomic claim, at most 2 automatic resumes), and a Retry button for failures (`pipeline/process.ts`).
 

@@ -247,7 +247,7 @@ async function readTool(sessionId: string, name: string, args: Record<string, un
     case 'brief_me': {
       const topic = str(args.topic);
       // "next meeting", "the one we scheduled", "upcoming" are not topics: they mean what's next.
-      return briefMe(topic && !/(next|upcoming|scheduled|coming up|planned)/i.test(topic) ? topic : undefined, scope);
+      return briefMe(topic && !/\b(next|upcoming|scheduled|coming up|planned)\b/i.test(topic) ? topic : undefined, scope);
     }
     case 'cancel_pending_action': {
       const cancelled = await cancelPending(sessionId);

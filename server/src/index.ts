@@ -8,6 +8,7 @@ import { resumeAttachments } from './pipeline/attachments.js';
 import { queuedJobs } from './pipeline/jobs.js';
 import { watchInterruptedMeetings } from './pipeline/process.js';
 import { canFreeMemory, rssMb } from './memory.js';
+import { llmStatsSince, llmStatus } from './llm.js';
 import { appRouter } from './routes/app.js';
 import { attachmentsRouter } from './routes/attachments.js';
 import { chatRouter } from './routes/chat.js';
@@ -24,7 +25,10 @@ app.use(express.json({ limit: '1mb' }));
 
 // Memory and queue length are here so an uptime monitor (or a test) can watch them.
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, rss_mb: rssMb(), heap_mb: Math.round(process.memoryUsage().heapUsed / 1048576), gc: canFreeMemory(), jobs: queuedJobs(), commit: process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? null });
+  res.json({ ok: true, rss_mb: rssMb(), heap_mb: Math.round(process.memoryUsage().heapUsed / 1048576), gc: canFreeMemory(), jobs: queuedJobs(), commit: process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? null,
+    // Groq model chains and what this process has seen of each model's limits.
+    llm: { voice: config.voiceModels, extraction: config.extractModels, since: llmStatsSince(), models: llmStatus() },
+  });
 });
 
 // Every /api route needs the web app's key, the access code (extension) or an upload token.

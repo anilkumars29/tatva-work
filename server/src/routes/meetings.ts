@@ -5,6 +5,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { config } from '../config.js';
 import { embed } from '../pipeline/embed.js';
+import { deleteMeeting, MeetingBusyError } from '../pipeline/delete.js';
 import { enqueueMeeting, retryMeeting } from '../pipeline/process.js';
 import { checkRow, supabase } from '../supabase.js';
 
@@ -141,6 +142,25 @@ meetingsRouter.post('/meetings/:id/retry', async (req, res) => {
     return;
   }
   res.status(202).json({ id: meeting.id, status: 'uploaded' });
+});
+
+// DELETE /api/meetings/:id: removes the meeting and everything made from it
+// (tracker rows, Google Doc to trash, files, activity, chunks). Returns a report.
+meetingsRouter.delete('/meetings/:id', async (req, res) => {
+  if (!UUID.test(req.params.id)) {
+    res.status(400).json({ error: 'Invalid meeting id.' });
+    return;
+  }
+  try {
+    const report = await deleteMeeting(req.params.id);
+    if (!report) {
+      res.status(404).json({ error: 'Meeting not found.' });
+      return;
+    }
+    res.json({ deleted: report });
+  } catch (err) {
+    res.status(err instanceof MeetingBusyError ? 409 : 500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
 });
 
 // POST /api/search { query, match_count?, meeting_id? }: RAG retrieval over the knowledge base.

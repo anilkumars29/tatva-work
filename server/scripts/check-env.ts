@@ -47,7 +47,7 @@ async function main() {
   if (!models.ok) bad(`API key rejected (${models.status})`);
   else {
     const ids = ((await models.json()) as { data: { id: string }[] }).data.map((m) => m.id);
-    for (const model of [config.whisperModel, config.llmModel]) {
+    for (const model of [config.whisperModel, ...config.extractModels, ...config.voiceModels]) {
       if (ids.includes(model)) ok(`model ${model}`);
       else bad(`model ${model} not available to this key`);
     }

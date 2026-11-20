@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { useApi } from '@/hooks/use-api';
-import { api, durationLabel, dueLabel, initials, minutesLabel, plural, relativeDateTime, todayYmd } from '@/lib/tatva';
+import { api, durationLabel, dueLabel, initials, meetingErrorText, minutesLabel, plural, relativeDateTime, todayYmd } from '@/lib/tatva';
 import { PROCESSING, TOOL_LABELS, type CalendarEvent, type DashboardData, type MeetingRow, type PendingItem } from './types';
 import { firstName, ownerIsMe, useProfile } from './profile';
 import { EmptyState, ErrorState, Icon, Skeleton, SkeletonRows, Spinner, useTatvaUi } from './ui';
@@ -43,7 +43,7 @@ export function StatusPill({ meeting }: { meeting: MeetingRow }) {
     );
   if (meeting.status === 'failed')
     return (
-      <div className="inline-flex items-center gap-1.5 rounded-full bg-error-container/30 px-3 py-1 font-label-sm text-label-sm text-error" title={meeting.error ?? undefined}>
+      <div className="inline-flex items-center gap-1.5 rounded-full bg-error-container/30 px-3 py-1 font-label-sm text-label-sm text-error" title={meetingErrorText(meeting.error)}>
         <span className="h-1.5 w-1.5 rounded-full bg-error" />
         <span>Failed</span>
       </div>
@@ -134,9 +134,10 @@ export function MeetingListRow({
           )}
           <span>•</span>
           {processing ? (
-            <span className="truncate">{STEP_LABEL[meeting.status]}</span>
+            // A progress note ("AI service busy, retrying with another model") shows instead of the step name.
+            <span className="truncate" title={meeting.error ?? undefined}>{meeting.error || STEP_LABEL[meeting.status]}</span>
           ) : meeting.status === 'failed' ? (
-            <span className="truncate text-error" title={meeting.error ?? undefined}>{meeting.error ?? 'Processing failed'}</span>
+            <span className="truncate text-error" title={meetingErrorText(meeting.error)}>{meetingErrorText(meeting.error)}</span>
           ) : (
             <span className={meeting.action_count ? 'font-medium text-tertiary-fixed' : ''}>{plural(meeting.action_count, 'action')}</span>
           )}
