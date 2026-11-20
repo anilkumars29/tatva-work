@@ -217,9 +217,23 @@ export async function processMeeting(job: MeetingJob): Promise<void> {
   }
 }
 
+// Meetings this process has queued or is processing. A heartbeat keeps their
+// updated_at fresh so another instance (Render starts the new one before it
+// stops the old one during a deploy) doesn't pick them up as abandoned.
+const active = new Set<string>();
+const HEARTBEAT_MS = 20_000;
+setInterval(() => {
+  if (!active.size) return;
+  // Only rows still processing, so it never clears a failure's error message.
+  supabase.from('meetings').update({ error: null }).in('id', [...active]).in('status', [...PROCESSING_STATUSES]).then(({ error }) => {
+    if (error) console.warn(`[meetings] heartbeat failed: ${error.message}`);
+  });
+}, HEARTBEAT_MS).unref();
+
 // One job at a time across the server (see jobs.ts).
 export function enqueueMeeting(job: MeetingJob): void {
-  runJob(`meeting ${job.meetingId.slice(0, 8)}`, () => processMeeting(job));
+  active.add(job.meetingId);
+  runJob(`meeting ${job.meetingId.slice(0, 8)}`, () => processMeeting(job).finally(() => active.delete(job.meetingId)));
 }
 
 // ---- retry and resume ------------------------------------------------------------------
@@ -254,9 +268,14 @@ export async function retryMeeting(meeting: StoredMeeting): Promise<void> {
   await requeueFromStorage(meeting, { warnings: (meeting.warnings ?? []).filter((w) => !w.startsWith(RESUMED)) });
 }
 
+/** No heartbeat for this long = the instance processing it is gone. */
+const ABANDONED_AFTER_MS = 75_000;
+
 /**
- * On startup: meetings a previous run left mid-pipeline (a restart, a deploy or
- * running out of memory) are processed again from their stored audio. A meeting
+ * Meetings an earlier run left mid-pipeline (a restart, a deploy or running out
+ * of memory) are processed again from their stored audio. Runs on startup and
+ * every minute, and only takes meetings whose heartbeat has stopped, so during
+ * a zero-downtime deploy the old instance finishes what it started. A meeting
  * that was interrupted MAX_RESUMES times is marked failed instead, so one bad
  * recording can't keep restarting the server.
  */
@@ -265,6 +284,7 @@ export async function resumeInterruptedMeetings(): Promise<void> {
     .from('meetings')
     .select('id, audio_path, audio_mime, warnings')
     .in('status', [...PROCESSING_STATUSES])
+    .lt('updated_at', new Date(Date.now() - ABANDONED_AFTER_MS).toISOString())
     .order('created_at', { ascending: true });
   if (error) {
     console.error(`[startup] Could not reach the meetings table: ${error.message}`);
@@ -272,6 +292,7 @@ export async function resumeInterruptedMeetings(): Promise<void> {
     return;
   }
   for (const meeting of data ?? []) {
+    if (active.has(meeting.id)) continue;
     const short = meeting.id.slice(0, 8);
     const warnings: string[] = meeting.warnings ?? [];
     const resumes = warnings.filter((w) => w.startsWith(RESUMED)).length;
@@ -281,11 +302,18 @@ export async function resumeInterruptedMeetings(): Promise<void> {
       } else if (resumes >= MAX_RESUMES) {
         await setStatus(meeting.id, 'failed', { error: `Processing was interrupted ${resumes + 1} times by server restarts. Press Retry to try again.` });
       } else {
-        console.warn(`[startup] resuming meeting ${short} (attempt ${resumes + 2})`);
+        console.warn(`[meetings] resuming interrupted meeting ${short} (attempt ${resumes + 2})`);
         await requeueFromStorage(meeting, { warnings: [...warnings, `${RESUMED} (${new Date().toISOString()})`] });
       }
     } catch (err) {
       await setStatus(meeting.id, 'failed', { error: `Could not resume after a restart: ${errorMessage(err)}. Press Retry.` }).catch(() => {});
     }
   }
+}
+
+/** Checks for abandoned meetings now and then every minute. */
+export function watchInterruptedMeetings(): void {
+  const sweep = () => resumeInterruptedMeetings().catch((err) => console.error('[meetings] resume check failed:', err));
+  void sweep();
+  setInterval(sweep, 60_000).unref();
 }

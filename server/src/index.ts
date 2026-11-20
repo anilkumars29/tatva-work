@@ -6,7 +6,7 @@ import { config } from './config.js';
 import { warmUpEmbeddings } from './pipeline/embed.js';
 import { resumeAttachments } from './pipeline/attachments.js';
 import { queuedJobs } from './pipeline/jobs.js';
-import { resumeInterruptedMeetings } from './pipeline/process.js';
+import { watchInterruptedMeetings } from './pipeline/process.js';
 import { canFreeMemory, rssMb } from './memory.js';
 import { appRouter } from './routes/app.js';
 import { attachmentsRouter } from './routes/attachments.js';
@@ -46,7 +46,7 @@ app.listen(config.port, () => {
   console.log(`Tatva server on http://localhost:${config.port}`);
   if (!SERVER_KEY) console.warn('[startup] TATVA_SERVER_KEY is not set: /api is open to localhost (development mode).');
   if (!config.voiceApiKey) console.warn('[startup] VOICE_LLM_API_KEY is not set: the voice endpoint /v1/chat/completions is disabled.');
-  resumeInterruptedMeetings().catch((err) => console.error('[startup] resume failed:', err));
+  watchInterruptedMeetings();
   resumeAttachments().catch(() => {});
   warmUpEmbeddings()
     .then(() => console.log('[startup] Embedding model ready'))
