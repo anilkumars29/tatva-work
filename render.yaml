@@ -19,7 +19,9 @@ services:
     buildCommand: corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm build && pnpm run prefetch:model
     # Same as `pnpm start`, minus the pnpm wrapper process (~40 MB less RAM).
     # --expose-gc + a 256 MB heap cap: V8 collects (and the pipeline frees memory
-    # between steps) long before the 512 MB container limit.
+    # between steps) long before the 512 MB container limit. An existing service
+    # keeps the start command from its dashboard; the server enables gc itself
+    # when the flag is missing (GET /health shows "gc": true either way).
     startCommand: node --enable-source-maps --expose-gc --max-old-space-size=256 dist/index.js
     healthCheckPath: /health
     autoDeploy: true
