@@ -32,16 +32,28 @@ Measured on the production build (`node dist/index.js`) with the embedding model
 | After searches + voice turns | ~230 MB (peak 342 MB) |
 | While indexing an image (vision) + a PDF | ~270 MB (peak 342 MB) |
 
-- **Starter (512 MB, $7/month, always on): the plan in `render.yaml`.** It fits the
-  demo with ~170 MB headroom and never sleeps.
+- **Free: the plan in `render.yaml`.** 512 MB (fits, ~170 MB headroom) but a tenth
+  of a CPU, and it sleeps after 15 minutes without traffic, so it **needs the
+  UptimeRobot monitor below** to stay awake.
+- **Starter (512 MB, $7/month, always on)** is the better choice once a card is
+  available: change `plan: free` to `plan: starter` in `render.yaml`.
 - **Standard (2 GB)** if you want no doubt, e.g. hour-long recordings (Whisper runs
   at Groq, but transcript embedding and ffmpeg chunking add memory for long files).
-- **Free:** same 512 MB but a tenth of a CPU (slow model load and embeddings), and
-  it **sleeps after 15 minutes** without traffic. Waking takes about a minute, and
-  during that time Agora's calls to `/v1` time out, so Pooja would go silent mid-demo. Not
-  recommended for judging. If you must use it: create a free monitor at
-  uptimerobot.com (or cron-job.org) that GETs `https://<render-url>/health`
-  every 5 minutes, and open the site 5 minutes before judging.
+
+### Keeping the free plan awake (UptimeRobot)
+
+Waking a sleeping free service takes about a minute, and during that time Agora's
+calls to `/v1` time out, so Pooja would go silent mid-demo. A request every
+5 minutes counts as traffic and keeps it awake:
+
+1. Sign up at <https://uptimerobot.com> (free, no card) → **+ New monitor**.
+2. Type **HTTP(s)**, URL `https://tatva-server.onrender.com/health`, interval
+   **5 minutes** (the free tier's minimum) → **Create monitor**.
+3. Check it shows **Up** and Render's **Logs** show `GET /health` every 5 minutes.
+
+Even so, open the site and say one sentence to Pooja about 5 minutes before judging:
+a free instance can still restart (deploys, maintenance), and the first model load
+on 0.1 CPU is slow. One always-on free service uses ~720 of the 750 free hours a month.
 
 ## 0. Prepare the variables (one command)
 
@@ -61,7 +73,7 @@ This creates two gitignored files and prints which variables are filled (never v
 1. Open <https://dashboard.render.com> → **New +** → **Blueprint**.
 2. **Connect GitHub** (first time) → pick **anilkumars29/tatva-work** → **Connect**.
 3. Render reads `render.yaml` and shows **tatva-server** (Web Service, Singapore,
-   Starter). Blueprint name: `tatva`. It asks for the variables marked `sync: false`.
+   Free). Blueprint name: `tatva`. It asks for the variables marked `sync: false`.
    Fill them from `server/.env.render`:
 
    | Variable | From |

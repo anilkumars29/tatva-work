@@ -8,8 +8,10 @@ services:
     runtime: node
     region: singapore
     # Measured ~340 MB peak (embedding model loaded) and ~220-270 MB steady.
-    # starter = 512 MB, always on (no sleep). See docs/DEPLOY.md before choosing free.
-    plan: starter
+    # free = 512 MB, 0.1 CPU, sleeps after 15 min without traffic: keep it awake
+    # with an UptimeRobot monitor on /health every 5 min (docs/DEPLOY.md).
+    # Switch to starter (always on) when a card is available.
+    plan: free
     rootDir: server
     # pnpm comes from package.json "packageManager" via Corepack. Dev dependencies
     # are needed for the build (TypeScript); the embedding model is downloaded
