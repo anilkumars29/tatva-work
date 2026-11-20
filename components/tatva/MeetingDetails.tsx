@@ -261,7 +261,6 @@ export default function MeetingDetails({ id }: { id: string }) {
   const title = m.title ?? m.source_title ?? 'Untitled meeting';
   const ready = m.status === 'ready';
   const played = total ? time / total : 0;
-  const openItems = m.action_items.filter((a) => a.status === 'open').length;
 
   return (
     <div className="flex w-full flex-col">
