@@ -12,9 +12,20 @@ Google Doc and the meeting JSON.
 
 No build step: plain JavaScript, load the folder unpacked. Requires Chrome 116+.
 
+### Settings (gear icon)
+
+- **Server:** **Cloud** (the Render server, default), **Local**
+  (`http://localhost:4000` + web app on `localhost:3000`), or **Custom** (any
+  server and web app URL; Chrome asks for permission to reach them once and the
+  extension registers its page marker on that web app).
+- **Access code:** the web app's login code (`TATVA_ACCESS_CODE`). Sent to the
+  server as `x-tatva-access-code` with uploads and status checks. Not needed for Local.
+- **Test connection** checks `/health` and an authorised API call.
+- "Open in Tatva" after an upload opens the meeting in the web app.
+
 ### Reloading after an update
 
-After pulling changes (current version **0.4.0**): open `chrome://extensions`,
+After pulling changes (current version **0.5.0**): open `chrome://extensions`,
 find **Tatva Recorder** and press its reload icon (or *Load unpacked* → this
 `extension/` folder if it isn't installed). Then reload the Tatva web app tab
 (`http://localhost:3000`): content scripts only attach to pages loaded after
@@ -30,7 +41,8 @@ shows the version. If it still says *not detected*, check the extension's
 | `popup.html/js/css` | Start/Stop button, running timer, status and messages |
 | `service-worker.js` | Owns recording + upload state (`chrome.storage.session`), creates/closes the offscreen document, saves the backup with `chrome.downloads`, polls meeting status from the server, shows the `REC` badge |
 | `offscreen.html/js` | Captures tab audio (tab-capture stream ID) and mic, mixes them with Web Audio, records with `MediaRecorder` (Opus 48 kbps), plays tab audio back so you can hear the meeting, uploads the recording |
-| `page-marker.js` | Content script on `localhost:3000` only: marks `<html data-tatva-extension="<version>">` (re-applied if the page re-renders it) and answers a `tatva:extension-ping` window message, so the web app can show "Extension connected". Reads nothing from the page |
+| `settings.js` | Server URL / web app URL / access code (`chrome.storage.local`), shared by the popup and the service worker |
+| `page-marker.js` | Content script on `localhost:3000` and `*.vercel.app` (plus a custom web app URL, registered at runtime); stays inert unless the page has `<meta name="tatva-app">`. It marks `<html data-tatva-extension="<version>">` (re-applied if the page re-renders it) and answers a `tatva:extension-ping` window message, so the web app can show "Extension connected". Reads nothing from the page |
 | `icons/` | Tatva mark at 16/32/48/128 px (generated from `public/brand`) |
 | `permission.html/js` | One-time page that grants the extension microphone access (offscreen documents cannot show a permission prompt) |
 

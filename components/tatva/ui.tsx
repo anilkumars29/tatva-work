@@ -54,6 +54,8 @@ export interface ActionRequest {
   title: string;
   icon?: string;
   confirmLabel?: string;
+  /** Returns a hint while required fields are missing; the read-back waits until it returns null. */
+  missing?: (input: Record<string, unknown>) => string | null;
   /** Optional form fields shown above the read-back (e.g. recipient). */
   fields?: (set: (patch: Record<string, unknown>) => void, input: Record<string, unknown>) => ReactNode;
   onDone?: (result: ActionResult) => void;
@@ -160,18 +162,25 @@ function ActionDialog({ request, onClose, toast }: { request: ActionRequest; onC
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Read-back from the server (same text Pooja speaks), refreshed when fields change.
+  const missing = request.missing?.(input) ?? null;
+
+  // Read-back from the server (same text Pooja speaks), refreshed when fields
+  // change (debounced while typing), and only once required fields are filled.
   useEffect(() => {
     let live = true;
     setSummary(null);
     setPreviewError(null);
-    api<{ summary: string }>('/actions/preview', { method: 'POST', json: { kind: request.kind, input } })
-      .then((r) => live && setSummary(r.summary))
-      .catch((e) => live && setPreviewError(e.message));
+    if (missing) return;
+    const timer = setTimeout(() => {
+      api<{ summary: string }>('/actions/preview', { method: 'POST', json: { kind: request.kind, input } })
+        .then((r) => live && setSummary(r.summary))
+        .catch((e) => live && setPreviewError(e.message));
+    }, request.fields ? 350 : 0);
     return () => {
       live = false;
+      clearTimeout(timer);
     };
-  }, [request.kind, input]);
+  }, [request.kind, request.fields, input, missing]);
 
   const confirm = async () => {
     setBusy(true);
@@ -197,6 +206,8 @@ function ActionDialog({ request, onClose, toast }: { request: ActionRequest; onC
           <span className="font-label-sm text-label-sm uppercase tracking-wider text-primary-container">Tatva will</span>
           {summary ? (
             <p className="font-body-md text-body-md text-on-surface">{summary.replace(/\s*(Should|Shall) I [^?]*\?$/, '')}</p>
+          ) : missing ? (
+            <p className="font-body-md text-body-md text-on-surface-variant">{missing}</p>
           ) : previewError ? (
             <p className="font-body-md text-body-md text-error">{previewError}</p>
           ) : (

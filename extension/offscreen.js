@@ -133,7 +133,7 @@ function stop() {
 // Uploads the last recording to the Tatva server. Reports the outcome
 // with an 'upload-finished' message (which also wakes the service worker if
 // Chrome suspended it during a long upload).
-async function upload({ serverUrl, tabTitle, tabUrl }) {
+async function upload({ serverUrl, headers, tabTitle, tabUrl }) {
   if (!lastRecording) throw new Error('No recording to upload.');
   const { blob, startedAt, durationMs } = lastRecording;
 
@@ -146,12 +146,13 @@ async function upload({ serverUrl, tabTitle, tabUrl }) {
     form.append('recorded_at', new Date(startedAt).toISOString());
     form.append('duration_ms', String(durationMs));
 
-    const response = await fetch(`${serverUrl}/api/meetings`, { method: 'POST', body: form });
+    const response = await fetch(`${serverUrl}/api/meetings`, { method: 'POST', body: form, headers: headers || {} });
     const body = await response.json().catch(() => ({}));
+    if (response.status === 401) throw new Error('The server refused the upload: check the access code in the extension settings (gear icon). The recording is in your Downloads.');
     if (!response.ok || !body.id) throw new Error(body.error || `Server responded ${response.status}`);
     result = { ok: true, meetingId: body.id };
   } catch (err) {
-    const message = err instanceof TypeError ? `Server not reachable at ${serverUrl}. Is it running?` : err.message;
+    const message = err instanceof TypeError ? `Server not reachable at ${serverUrl}. Is it running? (Change it in the extension settings.)` : err.message;
     result = { ok: false, error: message };
   }
   lastRecording = null;

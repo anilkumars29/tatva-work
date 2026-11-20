@@ -37,12 +37,14 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark h-full ${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
       <head>
+        {/* Lets the Tatva Recorder extension recognise this app on any domain (extension/page-marker.js). */}
+        <meta name="tatva-app" content="web" />
         {/* Icon font: "block" avoids flashing ligature names before it loads. */}
         {/* eslint-disable-next-line @next/next/no-page-custom-font, @next/next/google-font-display */}
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet" />
       </head>
       <body className="h-full min-h-screen bg-surface font-sans text-body-md text-on-surface antialiased">
-        <AppShell>{children}</AppShell>
+        <AppShell authEnabled={!!process.env.TATVA_ACCESS_CODE?.trim()}>{children}</AppShell>
       </body>
     </html>
   );

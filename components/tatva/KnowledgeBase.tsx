@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApi } from '@/hooks/use-api';
-import { api, durationLabel, plural, relativeDateTime } from '@/lib/tatva';
+import { api, durationLabel, plural, relativeDateTime, uploadTarget } from '@/lib/tatva';
 import type { DashboardData, DocumentRow, MeetingRow, SearchResult } from './types';
 import { AttachmentPreview, AttachmentThumb, openAttachment, StatusPill, type Attachment } from './Attachments';
 import { EmptyState, Icon, Spinner, useTatvaUi } from './ui';
@@ -108,7 +108,8 @@ export default function KnowledgeBase() {
     try {
       const form = new FormData();
       form.append('file', file, file.name);
-      const res = await fetch('/tatva/documents', { method: 'POST', body: form });
+      const target = await uploadTarget();
+      const res = await fetch(target.url('/documents'), { method: 'POST', body: form, headers: target.headers });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? `Upload failed (${res.status})`);
       toast(`Uploaded ${file.name}. Tatva is reading and indexing it…`, 'success');

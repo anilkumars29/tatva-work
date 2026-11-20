@@ -145,3 +145,20 @@ export function fileSize(bytes: number | null | undefined): string {
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
+
+/**
+ * Where file uploads go. In production the browser uploads straight to server/
+ * with a 10-minute token (Vercel caps proxied request bodies at 4.5 MB); in
+ * local dev it uses the /tatva proxy.
+ */
+let uploadCache: { base: string; token: string | null; at: number } | null = null;
+export async function uploadTarget(): Promise<{ url: (path: string) => string; headers: Record<string, string> }> {
+  if (!uploadCache || Date.now() - uploadCache.at > 5 * 60_000) {
+    const res = await fetch('/api/upload-target', { cache: 'no-store' });
+    if (!res.ok) throw new ApiError(res.status === 401 ? 'Your session expired. Reload the page and sign in.' : `Upload is unavailable (${res.status}).`, res.status);
+    const body = (await res.json()) as { base: string; token: string | null };
+    uploadCache = { ...body, at: Date.now() };
+  }
+  const { base, token } = uploadCache;
+  return { url: (path) => `${base}${path}`, headers: token ? { 'x-tatva-upload': token } : {} };
+}

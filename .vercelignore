@@ -4,4 +4,10 @@ README.md
 .gitignore
 .DS_Store
 node_modules
-*.log 
+*.log
+# Tatva: the server deploys to Render and the extension is loaded in Chrome.
+server
+extension
+docs/ai
+e2e
+test-results

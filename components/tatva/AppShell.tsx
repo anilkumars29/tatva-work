@@ -18,7 +18,7 @@ const NAV = [
 ];
 
 /** The version this repo's extension/ folder is at; older installs are asked to reload. */
-const EXTENSION_VERSION = '0.4.0';
+const EXTENSION_VERSION = '0.5.0';
 
 const CONNECTIONS: { key: string; label: string; icon: string }[] = [
   { key: 'gmail', label: 'Gmail', icon: 'mail' },
@@ -205,7 +205,7 @@ function StatusRow({ icon, label, state, detail }: { icon: string; label: string
   );
 }
 
-function ProfileMenu({ extension, onEdit, onClose }: { extension: string | null | undefined; onEdit: () => void; onClose: () => void }) {
+function ProfileMenu({ extension, onEdit, onClose, authEnabled }: { extension: string | null | undefined; onEdit: () => void; onClose: () => void; authEnabled: boolean }) {
   const { profile, error: profileError } = useProfile();
   const [status, setStatus] = useState<Record<string, boolean> | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -302,13 +302,29 @@ function ProfileMenu({ extension, onEdit, onClose }: { extension: string | null 
         )}
         <p className="px-space-md pt-1 text-caption text-on-surface-variant">Via Composio. Pooja can act only through connected apps.</p>
       </div>
+      {authEnabled && (
+        <div className="border-t border-hairline p-space-sm">
+          <button
+            type="button"
+            role="menuitem"
+            onClick={async () => {
+              await fetch('/api/logout', { method: 'POST' }).catch(() => {});
+              window.location.assign('/login');
+            }}
+            className="flex w-full items-center gap-2 rounded-lg px-space-sm py-2 text-label-md text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+          >
+            <Icon name="logout" className="text-body-lg" />
+            Sign out
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
 // ------------------------------------------------------------------- shell
 
-function Shell({ children }: { children: ReactNode }) {
+function Shell({ children, authEnabled }: { children: ReactNode; authEnabled: boolean }) {
   const pathname = usePathname();
   const extension = useExtensionVersion();
   const { profile } = useProfile();
@@ -378,6 +394,7 @@ function Shell({ children }: { children: ReactNode }) {
             </button>
             {menuOpen && (
               <ProfileMenu
+                authEnabled={authEnabled}
                 extension={extension}
                 onClose={closeMenu}
                 onEdit={() => {
@@ -395,11 +412,14 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, authEnabled = false }: { children: ReactNode; authEnabled?: boolean }) {
+  const pathname = usePathname();
+  // The sign-in page has no sidebar and can't load any data yet.
+  if (pathname === '/login') return <TatvaUiProvider>{children}</TatvaUiProvider>;
   return (
     <TatvaUiProvider>
       <ProfileProvider>
-        <Shell>{children}</Shell>
+        <Shell authEnabled={authEnabled}>{children}</Shell>
       </ProfileProvider>
     </TatvaUiProvider>
   );

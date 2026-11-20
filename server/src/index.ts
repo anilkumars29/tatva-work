@@ -1,6 +1,7 @@
 import cors from 'cors';
 import express, { type ErrorRequestHandler } from 'express';
 import multer from 'multer';
+import { allowedOrigin, apiAuth, SERVER_KEY } from './auth.js';
 import { config } from './config.js';
 import { warmUpEmbeddings } from './pipeline/embed.js';
 import { resumeAttachments } from './pipeline/attachments.js';
@@ -13,30 +14,18 @@ import { supabase } from './supabase.js';
 
 const app = express();
 
-// Requests through the Cloudflare tunnel (they carry cf-ray) may only reach the
-// voice endpoint and health check: the tunnel URL is public, the meeting API is not.
-app.use((req, res, next) => {
-  if (req.get('cf-ray') && !req.path.startsWith('/v1/') && req.path !== '/health') {
-    res.status(404).json({ error: 'Not found' });
-    return;
-  }
-  next();
-});
+app.set('trust proxy', 1); // behind Render's proxy
 
-// The extension calls with host_permissions (no CORS needed); this allows the
-// local web app and extension pages too.
-app.use(
-  cors({
-    origin: (origin, cb) =>
-      cb(null, !origin || /^chrome-extension:\/\//.test(origin) || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)),
-  }),
-);
+// CORS: localhost, the Chrome extension, and the deployed web app (WEB_ORIGINS).
+app.use(cors({ origin: (origin, cb) => cb(null, allowedOrigin(origin)) }));
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
 
+// Every /api route needs the web app's key, the access code (extension) or an upload token.
+app.use('/api', apiAuth);
 app.use('/api', meetingsRouter);
 app.use('/api', appRouter);
 app.use('/api', knowledgeRouter);
@@ -68,6 +57,7 @@ async function failInterruptedMeetings() {
 
 app.listen(config.port, () => {
   console.log(`Tatva server on http://localhost:${config.port}`);
+  if (!SERVER_KEY) console.warn('[startup] TATVA_SERVER_KEY is not set: /api is open to localhost (development mode).');
   if (!config.voiceApiKey) console.warn('[startup] VOICE_LLM_API_KEY is not set: the voice endpoint /v1/chat/completions is disabled.');
   failInterruptedMeetings();
   resumeAttachments().catch(() => {});

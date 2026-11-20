@@ -97,6 +97,22 @@ pnpm run seed:demo-meetings  # voices 3 demo meetings with Murf Falcon (4 en-IN 
 The first start downloads the embedding model (~90 MB) into
 `node_modules/@huggingface/transformers/.cache`.
 
+## Access control and deployment
+
+Every `/api/*` request needs one of: `x-tatva-key` = `TATVA_SERVER_KEY` (the web
+app's proxy), `x-tatva-access-code` = `TATVA_ACCESS_CODE` (the Chrome extension),
+or `x-tatva-upload` = a 10-minute token minted by the web app with the same key
+(direct browser uploads; upload routes only). `/health` is public and `/v1/*` has
+its own Bearer key. With `TATVA_SERVER_KEY` unset (local dev) `/api` is open to
+localhost but never through the Cloudflare quick tunnel; with `NODE_ENV=production`
+and no key it refuses everything. CORS allows localhost, `chrome-extension://*`
+and `WEB_ORIGINS` (comma-separated). See `src/auth.ts`.
+
+Production: `pnpm build` (compiles to `dist/`), `pnpm run prefetch:model`
+(downloads the embedding model at build time), `node dist/index.js`. Render
+Blueprint: [`../render.yaml`](../render.yaml); full steps and the memory
+measurements: [`../docs/DEPLOY.md`](../docs/DEPLOY.md).
+
 ## Meeting attachments
 
 PDFs and images (PNG, JPG, WebP) attached on a meeting page (upload, drag and

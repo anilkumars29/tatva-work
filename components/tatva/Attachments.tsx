@@ -6,7 +6,7 @@
 // and summarised in the meeting's Google Doc.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApi } from '@/hooks/use-api';
-import { api, fileSize, relativeDateTime } from '@/lib/tatva';
+import { api, fileSize, relativeDateTime, uploadTarget } from '@/lib/tatva';
 import { DialogFrame, Icon, Spinner, useTatvaUi } from './ui';
 
 export interface Attachment {
@@ -149,12 +149,14 @@ interface Upload {
   error?: string;
 }
 
-function uploadOne(meetingId: string, file: File, name: string, onProgress: (p: number) => void): Promise<Attachment> {
+async function uploadOne(meetingId: string, file: File, name: string, onProgress: (p: number) => void): Promise<Attachment> {
+  const target = await uploadTarget();
   return new Promise((resolve, reject) => {
     const form = new FormData();
     form.append('file', file, name);
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `/tatva/meetings/${meetingId}/attachments`);
+    xhr.open('POST', target.url(`/meetings/${meetingId}/attachments`));
+    for (const [k, v] of Object.entries(target.headers)) xhr.setRequestHeader(k, v);
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
     xhr.onload = () => {
       let body: { attachment?: Attachment; error?: string } = {};

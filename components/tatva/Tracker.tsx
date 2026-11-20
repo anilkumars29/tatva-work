@@ -124,6 +124,7 @@ export default function Tracker() {
       icon: 'report',
       confirmLabel: 'Log & escalate',
       input: { title: '', owner: contacts.data?.contacts.find((c) => /rahul/i.test(c.name))?.name ?? '', context: '', source: 'web' },
+      missing: (input) => (String(input.title ?? '').trim() ? null : 'Describe the issue to see what Tatva will do.'),
       fields: (set, input) => (
         <>
           <Field label="Issue" note="Required">

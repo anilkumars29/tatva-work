@@ -137,3 +137,6 @@ dist
 .pnpm-store/
 
 .DS_Store
+# Playwright
+/test-results/
+/playwright-report/

@@ -17,7 +17,7 @@ const sectionsParam = {
   description: 'Which parts of the meeting to include.',
 };
 
-export const TOOLS = [
+const RAW_TOOLS = [
   {
     type: 'function',
     function: {
@@ -163,6 +163,32 @@ export const TOOLS = [
     },
   },
 ] as const;
+
+// Models often send null for an optional argument ("owner": null), and Groq
+// rejects that against a plain {"type": "string"} schema (tool_use_failed).
+// So every optional property, at any depth, also accepts null; handlers read
+// arguments through str()/Array.isArray, which treat null as "not given".
+type Schema = { type?: unknown; properties?: Record<string, Schema>; required?: string[]; items?: Schema; [k: string]: unknown };
+function nullableOptionals(schema: Schema): Schema {
+  const out: Schema = { ...schema };
+  if (schema.properties) {
+    out.properties = Object.fromEntries(
+      Object.entries(schema.properties).map(([name, prop]) => {
+        const inner = nullableOptionals(prop);
+        const optional = !(schema.required ?? []).includes(name);
+        if (optional && typeof inner.type === 'string' && inner.type !== 'null') inner.type = [inner.type, 'null'];
+        return [name, inner];
+      }),
+    );
+  }
+  if (schema.items) out.items = nullableOptionals(schema.items);
+  return out;
+}
+
+export const TOOLS = RAW_TOOLS.map((tool) => ({
+  ...tool,
+  function: { ...tool.function, parameters: nullableOptionals(tool.function.parameters as Schema) },
+}));
 
 export { ACTION_KINDS, isActionKind };
 

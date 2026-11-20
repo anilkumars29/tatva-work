@@ -12,7 +12,29 @@
         <svg class="wordmark" viewBox="0 0 914 106" role="img" aria-label="Tatva"><path fill="currentColor" d="M0 0H106V24H66V106H40V24H0ZM182 106L234 0H260L312 106H283L247 32L211 106ZM390 0H496V24H456V106H430V24H390ZM586 0H614L648 70L682 0H710L662 106H634ZM778 106L830 0H856L908 106H879L843 32L807 106Z" /></svg>
       </h1>
       <span class="dot" id="dot" title="Recording status"></span>
+      <button type="button" class="icon-button" id="settingsToggle" title="Settings" aria-label="Settings" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3.5h-4L10.6 6a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 1.7 1L11 20.5h4l.4-2.5a7.4 7.4 0 0 0 1.7-1l2.4 1 2-3.4zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>
+      </button>
     </header>
+
+    <section class="settings" id="settings" hidden>
+      <fieldset>
+        <legend>Server</legend>
+        <label><input type="radio" name="server" value="cloud" /> Cloud <span class="hint" id="cloudHint"></span></label>
+        <label><input type="radio" name="server" value="local" /> Local <span class="hint">localhost:4000</span></label>
+        <label><input type="radio" name="server" value="custom" /> Custom</label>
+      </fieldset>
+      <div class="custom" id="customFields" hidden>
+        <label>Server URL <input type="url" id="serverUrl" placeholder="https://tatva-server.onrender.com" /></label>
+        <label>Web app URL <input type="url" id="webUrl" placeholder="https://tatva-work.vercel.app" /></label>
+      </div>
+      <label>Access code <input type="password" id="accessCode" placeholder="Same code as the web app" autocomplete="off" /></label>
+      <div class="settings-actions">
+        <button type="button" class="secondary" id="testConnection">Test connection</button>
+        <button type="button" class="start" id="saveSettings">Save</button>
+      </div>
+      <p class="message info" id="settingsMessage" hidden></p>
+    </section>
 
     <div class="timer" id="timer">00:00:00</div>
     <div class="status" id="status">Ready to record this tab.</div>
@@ -28,13 +50,14 @@
       <div class="meeting-detail" id="meetingDetail"></div>
       <div class="meeting-links">
         <a href="#" id="openDoc" hidden>Open Google Doc</a>
-        <a href="#" id="openJson" hidden>View details</a>
+        <a href="#" id="openJson" hidden>Open in Tatva</a>
         <a href="#" id="dismiss">Dismiss</a>
       </div>
     </section>
 
     <p class="message info" id="lastFile" hidden></p>
 
+    <script src="settings.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

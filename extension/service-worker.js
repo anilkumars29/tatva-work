@@ -12,7 +12,7 @@
 // Work server. While the server processes the meeting, the popup polls status
 // through 'get-state'.
 
-const SERVER_URL = 'http://localhost:4000';
+importScripts('settings.js'); // tatvaSettings(), tatvaHeaders(): server URL + access code
 const OFFSCREEN_URL = 'offscreen.html';
 
 const IDLE_STATE = {
@@ -124,7 +124,9 @@ async function refreshMeetingStatus(state) {
   const upload = state.upload;
   if (upload?.status !== 'processing' || !upload.meetingId) return state;
   try {
-    const response = await fetch(`${SERVER_URL}/api/meetings/${upload.meetingId}?transcript=false`);
+    const settings = await tatvaSettings();
+    const response = await fetch(`${settings.serverUrl}/api/meetings/${upload.meetingId}?transcript=false`, { headers: tatvaHeaders(settings) });
+    if (response.status === 401) throw new Error('wrong access code: open settings (gear icon)');
     if (!response.ok) throw new Error(`Server responded ${response.status}`);
     const { meeting } = await response.json();
     const finished = meeting.status === 'ready' || meeting.status === 'failed';
@@ -191,7 +193,8 @@ async function finishRecording({ url, size, durationMs }) {
     cleanup: { downloadId, downloadDone: false, uploadDone: false },
   });
 
-  await sendToOffscreen({ type: 'upload', serverUrl: SERVER_URL, tabTitle: state.tabTitle, tabUrl: state.tabUrl });
+  const settings = await tatvaSettings();
+  await sendToOffscreen({ type: 'upload', serverUrl: settings.serverUrl, headers: tatvaHeaders(settings), tabTitle: state.tabTitle, tabUrl: state.tabUrl });
   return next;
 }
 

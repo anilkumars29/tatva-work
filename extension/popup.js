@@ -20,9 +20,18 @@ const els = {
   openDoc: document.getElementById('openDoc'),
   openJson: document.getElementById('openJson'),
   dismiss: document.getElementById('dismiss'),
+  settingsToggle: document.getElementById('settingsToggle'),
+  settings: document.getElementById('settings'),
+  customFields: document.getElementById('customFields'),
+  serverUrl: document.getElementById('serverUrl'),
+  webUrl: document.getElementById('webUrl'),
+  accessCode: document.getElementById('accessCode'),
+  cloudHint: document.getElementById('cloudHint'),
+  testConnection: document.getElementById('testConnection'),
+  saveSettings: document.getElementById('saveSettings'),
+  settingsMessage: document.getElementById('settingsMessage'),
 };
 
-const SERVER_URL = 'http://localhost:4000';
 const STAGE_LABELS = {
   uploaded: 'Uploaded',
   transcribing: 'Transcribing',
@@ -209,10 +218,108 @@ els.openDoc.addEventListener('click', (event) => {
   if (state?.upload?.gdocUrl) chrome.tabs.create({ url: state.upload.gdocUrl });
 });
 
-els.openJson.addEventListener('click', (event) => {
+els.openJson.addEventListener('click', async (event) => {
   event.preventDefault();
-  if (state?.upload?.meetingId) chrome.tabs.create({ url: `${SERVER_URL}/api/meetings/${state.upload.meetingId}` });
+  const settings = await tatvaSettings();
+  if (state?.upload?.meetingId) chrome.tabs.create({ url: `${settings.webUrl}/meetings/${state.upload.meetingId}` });
 });
+
+// ---------------------------------------------------------------- settings
+
+const selectedServer = () => document.querySelector('input[name=server]:checked')?.value || 'cloud';
+
+/** Settings as currently entered in the form (not yet saved). */
+function formSettings() {
+  const server = selectedServer();
+  const preset = TATVA_PRESETS[server];
+  return {
+    server,
+    serverUrl: trimSlash(preset ? preset.serverUrl : els.serverUrl.value),
+    webUrl: trimSlash(preset ? preset.webUrl : els.webUrl.value),
+    accessCode: els.accessCode.value.trim(),
+  };
+}
+
+function settingsMessage(text, tone = 'info') {
+  els.settingsMessage.textContent = text || '';
+  els.settingsMessage.className = `message ${tone}`;
+  els.settingsMessage.hidden = !text;
+}
+
+async function loadSettingsForm() {
+  const s = await tatvaSettings();
+  for (const radio of document.querySelectorAll('input[name=server]')) radio.checked = radio.value === s.server;
+  els.serverUrl.value = s.server === 'custom' ? s.serverUrl : '';
+  els.webUrl.value = s.server === 'custom' ? s.webUrl : '';
+  els.accessCode.value = s.accessCode;
+  els.cloudHint.textContent = new URL(TATVA_PRESETS.cloud.serverUrl).host;
+  els.customFields.hidden = s.server !== 'custom';
+}
+
+const originOf = (url) => {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+};
+
+/** Custom URLs need host permission (to upload) and a content script (so the web app sees the extension). */
+async function grantCustomOrigins(s) {
+  const origins = [originOf(s.serverUrl), originOf(s.webUrl)].filter(Boolean).map((o) => `${o}/*`);
+  if (!origins.length) throw new Error('Enter valid https:// URLs.');
+  const granted = await chrome.permissions.request({ origins });
+  if (!granted) throw new Error('Permission to reach that server was not granted.');
+  const web = originOf(s.webUrl);
+  await chrome.scripting.unregisterContentScripts({ ids: ['tatva-marker-custom'] }).catch(() => {});
+  if (web) {
+    await chrome.scripting.registerContentScripts([{ id: 'tatva-marker-custom', matches: [`${web}/*`], js: ['page-marker.js'], runAt: 'document_start' }]);
+  }
+}
+
+async function testConnection(s) {
+  settingsMessage(`Checking ${s.serverUrl}… (a sleeping cloud server can take up to a minute)`);
+  try {
+    const health = await fetch(`${s.serverUrl}/health`);
+    if (!health.ok) throw new Error(`health check returned ${health.status}`);
+    const api = await fetch(`${s.serverUrl}/api/meetings?limit=1`, { headers: tatvaHeaders(s) });
+    if (api.status === 401) return settingsMessage('Server is up, but the access code was refused.', 'error');
+    if (!api.ok) return settingsMessage(`Server is up, but returned ${api.status}.`, 'warning');
+    settingsMessage('Connected. Recordings will upload here.', 'info');
+  } catch (err) {
+    settingsMessage(`Can't reach ${s.serverUrl}: ${err.message}`, 'error');
+  }
+}
+
+els.settingsToggle.addEventListener('click', async () => {
+  const open = els.settings.hidden;
+  els.settings.hidden = !open;
+  els.settingsToggle.setAttribute('aria-expanded', String(open));
+  if (open) {
+    settingsMessage(null);
+    await loadSettingsForm();
+  }
+});
+
+for (const radio of document.querySelectorAll('input[name=server]')) {
+  radio.addEventListener('change', () => {
+    els.customFields.hidden = selectedServer() !== 'custom';
+  });
+}
+
+els.saveSettings.addEventListener('click', async () => {
+  const s = formSettings();
+  try {
+    // Must run first, inside the click (permission prompts need a user gesture).
+    if (s.server === 'custom') await grantCustomOrigins(s);
+    await saveTatvaSettings(s);
+    await testConnection(s);
+  } catch (err) {
+    settingsMessage(err.message || String(err), 'error');
+  }
+});
+
+els.testConnection.addEventListener('click', () => testConnection(formSettings()));
 
 els.dismiss.addEventListener('click', async (event) => {
   event.preventDefault();
