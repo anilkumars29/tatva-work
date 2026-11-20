@@ -1,0 +1,13 @@
+{
+  // Production build: compiles src/ to dist/ (run with `pnpm start`).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": "src",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "sourceMap": true
+  },
+  "include": ["src/**/*.ts"]
+}

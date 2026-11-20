@@ -4,7 +4,8 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { isToolkitConnected } from '../composio.js';
-import { buildMarkdown, createKnowledgeDoc } from '../pipeline/gdoc.js';
+import { createKnowledgeDoc } from '../pipeline/gdoc.js';
+import { meetingDocMarkdown } from '../pipeline/meeting-doc.js';
 import { localYmd, zoneOffset } from '../pipeline/dates.js';
 import { actionMinutes } from '../pipeline/timesaved.js';
 import { supabase } from '../supabase.js';
@@ -168,7 +169,7 @@ appRouter.put(
     try {
       res.json({ profile: await saveProfile(req.body ?? {}) });
     } catch (err) {
-      res.status(/^Could not save/.test(message(err)) ? 500 : 400).json({ error: message(err) });
+      res.status(/^(Could not save|Profile saved, but)/.test(message(err)) ? 500 : 400).json({ error: message(err) });
     }
   }),
 );
@@ -203,52 +204,19 @@ appRouter.post(
       res.status(400).json({ error: 'Invalid meeting id.' });
       return;
     }
-    const { data: m, error } = await supabase
-      .from('meetings')
-      .select(
-        '*, action_items(position, task, owner, due_text, due_date), discuss_later(position, topic, people, suggested_time_text, suggested_at), transcript_segments(position, start_sec, end_sec, text)',
-      )
-      .eq('id', id)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!m) {
+    const built = await meetingDocMarkdown(id);
+    if (!built) {
       res.status(404).json({ error: 'Meeting not found.' });
       return;
     }
+    const { meeting: m, markdown } = built;
     if (m.gdoc_url) {
       res.json({ url: m.gdoc_url, created: false });
       return;
     }
-    const byPos = (a: { position: number }, b: { position: number }) => a.position - b.position;
-    const recorded = new Date(m.recorded_at ?? m.created_at);
-    const markdown = buildMarkdown(
-      {
-        title: m.title ?? 'Meeting',
-        summary: m.summary ?? '',
-        decisions: m.decisions ?? [],
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        action_items: (m.action_items ?? []).sort(byPos).map((a: any) => ({ task: a.task, owner: a.owner, due: a.due_text, due_date: a.due_date })),
-        stats_mentioned: m.stats_mentioned ?? [],
-        key_moments: m.key_moments ?? [],
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        discuss_later: (m.discuss_later ?? []).sort(byPos).map((d: any) => ({
-          topic: d.topic,
-          people: d.people ?? [],
-          suggested_time: d.suggested_time_text,
-          suggested_at: d.suggested_at,
-        })),
-      } as unknown as Parameters<typeof buildMarkdown>[0],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (m.transcript_segments ?? []).sort(byPos).map((s: any) => ({ start: Number(s.start_sec), end: Number(s.end_sec), text: s.text })),
-      {
-        dateLabel: new Intl.DateTimeFormat('en-IN', { timeZone: config.timeZone, dateStyle: 'medium' }).format(recorded),
-        durationMinutes: Number(m.duration_seconds ?? 0) / 60,
-        timeSaved: { minutes: m.time_saved_minutes ?? 0, breakdown: m.time_saved_breakdown ?? [] },
-      },
-    );
     const started = Date.now();
     try {
-      const doc = await createKnowledgeDoc(`Tatva: ${m.title ?? 'Meeting'} (${localYmd(recorded)})`, markdown);
+      const doc = await createKnowledgeDoc(built.title, markdown);
       await supabase.from('meetings').update({ gdoc_id: doc.id, gdoc_url: doc.url }).eq('id', id);
       void logActivity({ sessionId: 'web', tool: 'create_google_doc', args: { meeting_id: id }, status: 'confirmed', result: doc, durationMs: Date.now() - started });
       res.json({ url: doc.url, created: true });

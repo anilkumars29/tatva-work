@@ -46,6 +46,10 @@ export const config = {
 
   embeddingModel: process.env.EMBEDDING_MODEL?.trim() || 'Xenova/all-MiniLM-L6-v2',
 
+  // Meeting attachments: images are read by a Groq vision model.
+  visionModel: process.env.GROQ_VISION_MODEL?.trim() || 'qwen/qwen3.8-27b',
+  attachmentsBucket: process.env.SUPABASE_ATTACHMENTS_BUCKET?.trim() || 'attachments',
+
   composioApiKey: required('COMPOSIO_API_KEY'),
   composioUserId: process.env.COMPOSIO_USER_ID?.trim() || 'hack_user',
 

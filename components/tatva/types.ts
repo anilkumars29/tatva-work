@@ -113,8 +113,12 @@ export interface DocumentRow {
 }
 
 export interface SearchResult {
-  kind: 'meeting' | 'document';
+  kind: 'meeting' | 'document' | 'attachment';
+  /** Meeting, document or attachment id (by kind). */
   id: string;
+  /** For attachments: the meeting it was shared in. */
+  meeting_id?: string | null;
+  meeting_title?: string | null;
   title: string;
   date: string | null;
   source_type: string;

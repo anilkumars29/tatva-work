@@ -5,9 +5,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApi } from '@/hooks/use-api';
 import { api, durationLabel, plural, relativeDateTime } from '@/lib/tatva';
 import type { DashboardData, DocumentRow, MeetingRow, SearchResult } from './types';
+import { AttachmentPreview, AttachmentThumb, openAttachment, StatusPill, type Attachment } from './Attachments';
 import { EmptyState, Icon, Spinner, useTatvaUi } from './ui';
 
-type Tab = 'all' | 'meetings' | 'documents';
+type Tab = 'all' | 'meetings' | 'documents' | 'attachments';
 
 const sizeLabel = (bytes: number | null) =>
   bytes == null ? '' : bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -42,6 +43,10 @@ export default function KnowledgeBase() {
   const docs = useApi<{ documents: DocumentRow[] }>('/documents', {
     refreshMs: (d) => (d?.documents.some((x) => x.status === 'processing') ? 2000 : 30_000),
   });
+  const files = useApi<{ attachments: Attachment[] }>('/attachments', {
+    refreshMs: (d) => (d?.attachments.some((x) => x.status === 'processing') ? 2500 : 30_000),
+  });
+  const [preview, setPreview] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('all');
   const [query, setQuery] = useState('');
   const [searched, setSearched] = useState<string | null>(null);
@@ -64,6 +69,7 @@ export default function KnowledgeBase() {
 
   const meetingList: MeetingRow[] = useMemo(() => (meetings.data?.meetings ?? []).filter((m) => m.status === 'ready'), [meetings.data]);
   const docList = useMemo(() => docs.data?.documents ?? [], [docs.data]);
+  const fileList = useMemo(() => files.data?.attachments ?? [], [files.data]);
   const lastIndexed = useMemo(() => {
     const times = [...meetingList.map((m) => m.indexed_at ?? m.recorded_at), ...docList.filter((d) => d.status === 'ready').map((d) => d.updated_at)].filter(Boolean) as string[];
     return times.sort().at(-1) ?? null;
@@ -127,17 +133,19 @@ export default function KnowledgeBase() {
     }
   }, [docList, toast]);
 
-  const shownResults = (results ?? []).filter((r) => tab === 'all' || (tab === 'meetings' ? r.kind === 'meeting' : r.kind === 'document'));
+  const shownResults = (results ?? []).filter((r) => tab === 'all' || r.kind === tab.replace(/s$/, ''));
   const tabs: { id: Tab; label: string; count: number }[] = searched
     ? [
         { id: 'all', label: 'All', count: results?.length ?? 0 },
         { id: 'meetings', label: 'Meetings', count: results?.filter((r) => r.kind === 'meeting').length ?? 0 },
         { id: 'documents', label: 'Documents', count: results?.filter((r) => r.kind === 'document').length ?? 0 },
+        { id: 'attachments', label: 'Attachments', count: results?.filter((r) => r.kind === 'attachment').length ?? 0 },
       ]
     : [
-        { id: 'all', label: 'All', count: meetingList.length + docList.length },
+        { id: 'all', label: 'All', count: meetingList.length + docList.length + fileList.length },
         { id: 'meetings', label: 'Meetings', count: meetingList.length },
         { id: 'documents', label: 'Documents', count: docList.length },
+        { id: 'attachments', label: 'Attachments', count: fileList.length },
       ];
 
   const loading = (!meetings.data && !meetings.error) || (!docs.data && !docs.error);
@@ -246,17 +254,27 @@ export default function KnowledgeBase() {
             <div key={`${r.id}-${i}`} className="group flex flex-col gap-space-sm rounded-xl bg-surface-container-low p-space-md shadow-md transition-colors hover:bg-surface-container border border-hairline">
               <div className="flex items-center justify-between gap-space-sm">
                 <div className="flex min-w-0 items-center gap-space-xs">
-                  <Icon name={r.kind === 'document' ? 'description' : 'graphic_eq'} className="text-headline-sm text-on-surface-variant" />
+                  <Icon name={r.kind === 'document' ? 'description' : r.kind === 'attachment' ? 'attach_file' : 'graphic_eq'} className="text-headline-sm text-on-surface-variant" />
                   <span className="truncate font-label-md text-label-md text-on-surface">{r.title}</span>
+                  {r.kind === 'attachment' && <span className="hidden truncate text-caption text-on-surface-variant sm:inline">shared in {r.meeting_title}</span>}
                   <span className="shrink-0 rounded bg-surface-container-highest px-2 py-0.5 font-caption text-caption text-on-surface-variant">
-                    {r.kind === 'document' ? `Page ${r.page ?? '?'}` : r.source_type.replace('_', ' ')}
+                    {r.kind === 'document' ? `Page ${r.page ?? '?'}` : r.kind === 'attachment' ? (r.page ? `Attachment · p.${r.page}` : 'Attachment') : r.source_type.replace('_', ' ')}
                   </span>
                 </div>
                 <span className="shrink-0 font-mono font-caption text-caption text-tertiary-fixed">{Math.round(r.similarity * 100)}% match</span>
               </div>
               <p className="font-body-sm text-body-sm text-on-surface-variant">{r.content}</p>
               <div className="flex justify-end">
-                {r.kind === 'meeting' ? (
+                {r.kind === 'attachment' ? (
+                  <div className="flex items-center gap-space-md">
+                    <button type="button" onClick={() => setPreview(r.id)} className="flex items-center gap-1 font-label-md text-label-md text-on-surface-variant hover:text-on-surface">
+                      Preview <Icon name="visibility" className="text-body-sm" />
+                    </button>
+                    <Link href={`/meetings/${r.meeting_id}`} className="flex items-center gap-1 font-label-md text-label-md text-primary-container hover:text-primary">
+                      Open meeting <Icon name="arrow_forward" className="text-body-sm" />
+                    </Link>
+                  </div>
+                ) : r.kind === 'meeting' ? (
                   <Link href={`/meetings/${r.id}`} className="flex items-center gap-1 font-label-md text-label-md text-primary-container hover:text-primary">
                     Open meeting <Icon name="arrow_forward" className="text-body-sm" />
                   </Link>
@@ -275,7 +293,7 @@ export default function KnowledgeBase() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-space-lg md:grid-cols-2 lg:grid-cols-3">
-          {tab !== 'documents' &&
+          {(tab === 'all' || tab === 'meetings') &&
             meetingList.map((m) => (
               <div key={m.id} className="group relative flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-low shadow-md transition-all duration-200 hover:bg-surface-container border border-hairline">
                 <Link href={`/meetings/${m.id}`} className="flex flex-col">
@@ -324,7 +342,7 @@ export default function KnowledgeBase() {
                 </div>
               </div>
             ))}
-          {tab !== 'meetings' &&
+          {(tab === 'all' || tab === 'documents') &&
             docList.map((d) => (
               <div key={d.id} className="group relative flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-low shadow-md transition-all duration-200 hover:bg-surface-container border border-hairline">
                 <div className="flex flex-col">
@@ -390,17 +408,70 @@ export default function KnowledgeBase() {
                 </div>
               </div>
             ))}
-          {((tab === 'documents' && docList.length === 0) || (tab === 'meetings' && meetingList.length === 0) || (tab === 'all' && meetingList.length + docList.length === 0)) && (
+          {(tab === 'all' || tab === 'attachments') &&
+            fileList.map((a) => (
+              <div key={a.id} className="group relative flex flex-col overflow-hidden rounded-xl border border-hairline bg-surface-container-low shadow-md transition-all duration-200 hover:bg-surface-container">
+                <button type="button" onClick={() => setPreview(a.id)} aria-label={`Preview ${a.name}`} className="relative block aspect-[16/9] w-full overflow-hidden border-b border-hairline bg-surface-container-lowest">
+                  <AttachmentThumb a={a} className="transition-transform duration-300 group-hover:scale-[1.02]" />
+                  <span className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-caption text-on-surface backdrop-blur">
+                    <Icon name="attach_file" className="text-[12px]" /> Attachment
+                  </span>
+                  <span className="absolute right-2 top-2 rounded-full bg-black/75 backdrop-blur">
+                    <StatusPill a={a} />
+                  </span>
+                </button>
+                <div className="flex flex-1 flex-col gap-space-sm p-space-md">
+                  <div className="flex flex-col gap-1">
+                    <h2 className="truncate text-headline-sm text-on-surface" title={a.name}>
+                      {a.name}
+                    </h2>
+                    <Link href={`/meetings/${a.meeting_id}`} className="flex items-center gap-1.5 truncate text-body-sm text-on-surface-variant hover:text-on-surface">
+                      <Icon name="graphic_eq" className="text-body-sm" />
+                      <span className="truncate">Shared in {a.meeting_title}</span>
+                    </Link>
+                  </div>
+                  <p className="line-clamp-2 text-body-sm text-on-surface-variant">
+                    {a.status === 'failed' ? a.error : a.status === 'processing' ? 'Reading and indexing…' : a.summary}
+                  </p>
+                  <div className="mt-auto flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="rounded bg-surface-container-highest px-2 py-0.5 font-mono text-caption text-on-surface">{sizeLabel(a.bytes)}</span>
+                      <span className="rounded bg-surface-container-highest px-2 py-0.5 text-caption capitalize text-on-surface">{a.kind === 'pdf' ? 'PDF' : (a.label ?? 'image')}</span>
+                    </div>
+                    <div className="flex items-center gap-space-xs">
+                      <button type="button" title="Preview" aria-label={`Preview ${a.name}`} onClick={() => setPreview(a.id)} className="rounded p-1 text-on-surface-variant transition-colors hover:text-on-surface">
+                        <Icon name="visibility" className="text-headline-sm" />
+                      </button>
+                      <button type="button" title="Download" aria-label={`Download ${a.name}`} onClick={() => openAttachment(a.id, true).catch((e) => toast(e.message, 'error'))} className="rounded p-1 text-on-surface-variant transition-colors hover:text-on-surface">
+                        <Icon name="download" className="text-headline-sm" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          {((tab === 'documents' && docList.length === 0) ||
+            (tab === 'meetings' && meetingList.length === 0) ||
+            (tab === 'attachments' && fileList.length === 0) ||
+            (tab === 'all' && meetingList.length + docList.length + fileList.length === 0)) && (
             <div className="md:col-span-2 lg:col-span-3">
               <EmptyState
-                icon={tab === 'documents' ? 'upload_file' : 'mic_none'}
-                title={tab === 'documents' ? 'No documents yet' : 'Nothing here yet'}
-                body={tab === 'documents' ? 'Upload an SOP or project plan (PDF) and Pooja can answer from it.' : 'Record a meeting or upload a PDF.'}
+                icon={tab === 'documents' ? 'upload_file' : tab === 'attachments' ? 'attach_file' : 'mic_none'}
+                title={tab === 'documents' ? 'No documents yet' : tab === 'attachments' ? 'No attachments yet' : 'Nothing here yet'}
+                body={
+                  tab === 'documents'
+                    ? 'Upload an SOP or project plan (PDF) and Pooja can answer from it.'
+                    : tab === 'attachments'
+                      ? 'Open a meeting and drop or paste the slides and screenshots shared in it.'
+                      : 'Record a meeting or upload a PDF.'
+                }
               />
             </div>
           )}
         </div>
       )}
+
+      {preview && <AttachmentPreview id={preview} onClose={() => setPreview(null)} />}
 
       <div className="flex items-center justify-center pb-space-2xl pt-space-lg">
         <div className="flex items-center gap-space-xs rounded-full bg-surface-container-low px-space-md py-space-sm font-body-sm text-body-sm text-on-surface-variant shadow-sm">

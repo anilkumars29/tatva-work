@@ -95,7 +95,7 @@ knowledgeRouter.get(
   '/knowledge/search',
   handle(async (req, res) => {
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
-    const type = req.query.type === 'meetings' || req.query.type === 'documents' ? req.query.type : 'all';
+    const type = req.query.type === 'meetings' || req.query.type === 'documents' || req.query.type === 'attachments' ? req.query.type : 'all';
     if (!q) {
       res.status(400).json({ error: 'Add a search query (?q=).' });
       return;
@@ -108,7 +108,7 @@ knowledgeRouter.get(
       filter_meeting_id: null,
     });
     if (error) throw new Error(error.message);
-    const rows = (data ?? []) as { meeting_id: string | null; document_id: string | null; source_type: string; content: string; metadata: Record<string, unknown>; similarity: number }[];
+    const rows = (data ?? []) as { meeting_id: string | null; document_id: string | null; attachment_id?: string | null; source_type: string; content: string; metadata: Record<string, unknown>; similarity: number }[];
     const meetingIds = [...new Set(rows.map((r) => r.meeting_id).filter(Boolean))] as string[];
     const docIds = [...new Set(rows.map((r) => r.document_id).filter(Boolean))] as string[];
     const [meetings, docs] = await Promise.all([
@@ -121,14 +121,23 @@ knowledgeRouter.get(
     const docById = new Map((docs.data ?? []).map((d: any) => [d.id, d]));
     const results = rows
       .map((r) => {
-        const kind = r.document_id ? 'document' : 'meeting';
+        const kind = r.attachment_id ? 'attachment' : r.document_id ? 'document' : 'meeting';
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const owner: any = r.document_id ? docById.get(r.document_id) : meetingById.get(r.meeting_id ?? '');
-        const body = r.content.replace(/^(Meeting|Document): [^\n]*\n/, '');
+        const body = r.content.replace(/^(Meeting|Document|Attachment): [^\n]*\n/, '');
         return {
           kind,
-          id: r.document_id ?? r.meeting_id,
-          title: owner ? (kind === 'document' ? owner.name : (owner.title ?? 'Untitled meeting')) : 'Unknown source',
+          id: r.attachment_id ?? r.document_id ?? r.meeting_id,
+          meeting_id: r.meeting_id,
+          meeting_title: kind === 'attachment' ? (owner?.title ?? 'Untitled meeting') : null,
+          title:
+            kind === 'attachment'
+              ? String(r.metadata?.name ?? 'Attachment')
+              : owner
+                ? kind === 'document'
+                  ? owner.name
+                  : (owner.title ?? 'Untitled meeting')
+                : 'Unknown source',
           date: owner?.recorded_at ?? owner?.created_at ?? null,
           source_type: r.source_type,
           page: typeof r.metadata?.page === 'number' ? r.metadata.page : null,
@@ -136,7 +145,7 @@ knowledgeRouter.get(
           similarity: Math.round(r.similarity * 100) / 100,
         };
       })
-      .filter((r) => type === 'all' || (type === 'meetings' ? r.kind === 'meeting' : r.kind === 'document'));
+      .filter((r) => type === 'all' || r.kind === type.replace(/s$/, ''));
     void logActivity({ sessionId: 'web', tool: 'search_knowledge', args: { query: q, type }, status: 'ok', result: results.slice(0, 10).map((r) => ({ title: r.title, similarity: r.similarity })) });
     res.json({ query: q, results });
   }),

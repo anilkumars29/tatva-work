@@ -21,13 +21,13 @@ async function main() {
   const { supabase } = await import('../src/supabase.js');
 
   console.log('Supabase');
-  for (const table of ['meetings', 'transcript_segments', 'action_items', 'discuss_later', 'knowledge_chunks', 'contacts', 'activity_log', 'pending_actions', 'documents']) {
+  for (const table of ['meetings', 'transcript_segments', 'action_items', 'discuss_later', 'knowledge_chunks', 'contacts', 'activity_log', 'pending_actions', 'documents', 'meeting_attachments']) {
     // A real select: HEAD requests report success even for missing tables.
     const { error } = await supabase.from(table).select('*').limit(1);
     if (error) bad(`table ${table}: ${error.message}`);
     else ok(`table ${table}`);
   }
-  for (const name of [config.audioBucket, 'documents']) {
+  for (const name of [config.audioBucket, 'documents', config.attachmentsBucket]) {
     const bucket = await supabase.storage.getBucket(name);
     if (bucket.error) bad(`storage bucket "${name}": ${bucket.error.message}`);
     else ok(`storage bucket "${name}"`);

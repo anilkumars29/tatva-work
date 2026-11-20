@@ -16,9 +16,14 @@ interface Draft {
 }
 const EMPTY: Draft = { name: '', email: '', slack_handle: '', role: '' };
 
-/** Your own contact entry: same email as your profile, else same first name. */
+/** Your own contact entry: the one linked to your profile (else same email / first name). */
 const isSelf = (c: Contact, profile: Profile | null) =>
-  !!profile && (profile.email && c.email ? profile.email.toLowerCase() === c.email.toLowerCase() : ownerIsMe(c.name, profile));
+  !!profile &&
+  (profile.contact_id
+    ? c.id === profile.contact_id
+    : profile.email && c.email
+      ? profile.email.toLowerCase() === c.email.toLowerCase()
+      : ownerIsMe(c.name, profile));
 
 export default function Contacts() {
   const { toast } = useTatvaUi();

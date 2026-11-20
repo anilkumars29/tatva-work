@@ -11,6 +11,9 @@ export interface Profile {
   email: string;
   avatar_color: string;
   updated_at: string | null;
+  /** Your own row in Contacts (kept in sync when the profile is saved). */
+  contact_id?: string | null;
+  contact_name?: string | null;
 }
 
 export const AVATAR_COLORS: { value: string; label: string }[] = [
@@ -43,7 +46,7 @@ export function ownerIsMe(owner: string | null | undefined, profile: Profile | n
 interface ProfileCtx {
   profile: Profile | null;
   error: string | null;
-  save: (next: Omit<Profile, 'updated_at'>) => Promise<Profile>;
+  save: (next: Pick<Profile, 'name' | 'role' | 'email' | 'avatar_color'>) => Promise<Profile>;
 }
 
 const Ctx = createContext<ProfileCtx>({ profile: null, error: null, save: async () => Promise.reject(new Error('No profile provider')) });
@@ -58,7 +61,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, []);
 
-  const save = useCallback(async (next: Omit<Profile, 'updated_at'>) => {
+  const save = useCallback(async (next: Pick<Profile, 'name' | 'role' | 'email' | 'avatar_color'>) => {
     const r = await api<{ profile: Profile }>('/profile', { method: 'PUT', json: next });
     setProfile(r.profile);
     setError(null);

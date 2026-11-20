@@ -4,6 +4,19 @@ import { formatTimestamp, type Segment } from './transcribe.js';
 
 const MAX_TRANSCRIPT_CHARS = 100_000;
 
+export interface DocAttachment {
+  name: string;
+  kind: 'pdf' | 'image';
+  label: string | null;
+  pages: number | null;
+  summary: string | null;
+}
+
+function attachmentLine(a: DocAttachment): string {
+  const what = a.kind === 'pdf' ? `PDF${a.pages ? `, ${a.pages} page${a.pages === 1 ? '' : 's'}` : ''}` : (a.label ?? 'image');
+  return `**${a.name}** (${what}): ${a.summary ?? 'No summary.'}`;
+}
+
 function bullets(items: string[], empty: string): string {
   return items.length ? items.map((item) => `- ${item}`).join('\n') : `_${empty}_`;
 }
@@ -11,7 +24,12 @@ function bullets(items: string[], empty: string): string {
 export function buildMarkdown(
   knowledge: Knowledge,
   segments: Segment[],
-  info: { dateLabel: string; durationMinutes: number; timeSaved: { minutes: number; breakdown: { task: string; minutes: number }[] } },
+  info: {
+    dateLabel: string;
+    durationMinutes: number;
+    timeSaved: { minutes: number; breakdown: { task: string; minutes: number }[] };
+    attachments?: DocAttachment[];
+  },
 ): string {
   let transcript = segments.map((s) => `**[${formatTimestamp(s.start)}]** ${s.text}`).join('\n\n');
   if (transcript.length > MAX_TRANSCRIPT_CHARS) {
@@ -77,10 +95,23 @@ ${bullets(
   'No breakdown.',
 )}
 
-## Transcript
+${
+  info.attachments?.length
+    ? `## Attachments
+
+${bullets(info.attachments.map(attachmentLine), '')}
+
+`
+    : ''
+}## Transcript
 
 ${transcript}
 `;
+}
+
+/** Replaces an existing knowledge doc's content (used when attachments change). */
+export async function updateKnowledgeDoc(documentId: string, markdown: string): Promise<void> {
+  await executeTool('googledocs', 'GOOGLEDOCS_UPDATE_DOCUMENT_MARKDOWN', { id: documentId, markdown });
 }
 
 /** Creates the meeting's knowledge doc in Google Docs via Composio. */

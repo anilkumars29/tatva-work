@@ -100,7 +100,7 @@ function ExtensionCard({ version }: { version: string | null | undefined }) {
 function EditProfileDialog({ onClose }: { onClose: () => void }) {
   const { profile, save } = useProfile();
   const { toast } = useTatvaUi();
-  const [draft, setDraft] = useState<Omit<Profile, 'updated_at'>>({
+  const [draft, setDraft] = useState<Pick<Profile, 'name' | 'role' | 'email' | 'avatar_color'>>({
     name: profile?.name ?? '',
     role: profile?.role ?? '',
     email: profile?.email ?? '',
@@ -167,6 +167,12 @@ function EditProfileDialog({ onClose }: { onClose: () => void }) {
             })}
           </div>
         </fieldset>
+        <p className="flex items-start gap-2 text-body-sm text-on-surface-variant">
+          <Icon name="link" className="mt-0.5 text-body-md" />
+          {profile?.contact_id
+            ? `Linked to your contact “${profile.contact_name ?? 'you'}”: saving updates it too, and Pooja uses this email when you say “email me”.`
+            : 'Pooja uses this email when you say “email me”. Add yourself in Contacts (same email) to link your contact entry.'}
+        </p>
         {error && <p className="rounded-lg border border-error/30 bg-error-container/40 px-space-md py-space-sm text-body-sm text-error">{error}</p>}
         <div className="flex items-center justify-end gap-space-sm pt-space-sm">
           <button type="button" onClick={onClose} className="rounded-lg border border-hairline bg-surface-container-high px-space-md py-2 text-label-md text-on-surface hover:bg-surface-bright">

@@ -14,7 +14,8 @@ interface DocChunk {
   metadata: Record<string, unknown>;
 }
 
-async function summarize(name: string, text: string): Promise<string> {
+/** One plain sentence about a file, for cards and the meeting doc. */
+export async function summarize(name: string, text: string, what = 'a company document'): Promise<string> {
   const excerpt = text.replace(/\s+/g, ' ').trim();
   try {
     const data = (await groqPost('/chat/completions', () => ({
@@ -24,7 +25,7 @@ async function summarize(name: string, text: string): Promise<string> {
         reasoning_effort: 'low',
         max_completion_tokens: 400,
         messages: [
-          { role: 'system', content: 'Describe what a company document covers in one plain sentence of at most 30 words. No preamble.' },
+          { role: 'system', content: `Describe what ${what} covers in one plain sentence of at most 30 words. No preamble.` },
           { role: 'user', content: `File: ${name}\n\n${excerpt.slice(0, 4000)}` },
         ],
       }),
@@ -41,13 +42,18 @@ async function setDoc(id: string, patch: Record<string, unknown>) {
   check(await supabase.from('documents').update(patch).eq('id', id), 'Update document');
 }
 
+/** Text per page of a PDF (shared with meeting attachments). */
+export async function pdfPages(bytes: Uint8Array): Promise<{ totalPages: number; pages: string[] }> {
+  const pdf = await getDocumentProxy(bytes);
+  const { totalPages, text } = await extractText(pdf, { mergePages: false });
+  return { totalPages, pages: (Array.isArray(text) ? text : [text]).map((t) => String(t ?? '')) };
+}
+
 /** Extracts, chunks, embeds and indexes one uploaded PDF. Never throws. */
 export async function processDocument(id: string, name: string, bytes: Uint8Array): Promise<void> {
   const started = Date.now();
   try {
-    const pdf = await getDocumentProxy(bytes);
-    const { totalPages, text } = await extractText(pdf, { mergePages: false });
-    const pages = (Array.isArray(text) ? text : [text]).map((t) => String(t ?? ''));
+    const { totalPages, pages } = await pdfPages(bytes);
     const chunks: DocChunk[] = [];
     pages.forEach((pageText, i) => {
       for (const body of windows(pageText)) {

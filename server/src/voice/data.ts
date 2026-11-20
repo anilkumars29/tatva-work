@@ -1,6 +1,8 @@
 // Read-side helpers for the voice agent: meetings, open items, contacts, RAG.
 import { config } from '../config.js';
+import { attachmentCitation } from '../pipeline/citation.js';
 import { embed } from '../pipeline/embed.js';
+import { getProfile } from '../profile.js';
 import { supabase } from '../supabase.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -79,6 +81,11 @@ const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9@.\s]/g, ' ').repla
 export async function resolveContact(nameOrEmail: string): Promise<{ name: string; email: string; contact?: Contact } | null> {
   const raw = nameOrEmail.trim();
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return { name: raw, email: raw };
+  // "me", "myself", "my email": the signed-in user's profile email.
+  if (/^(me|myself|i|mine|my (own )?(email|inbox|mail)|the user|yourself)$/i.test(raw)) {
+    const profile = await getProfile();
+    return profile.email ? { name: profile.name, email: profile.email } : null;
+  }
   const wanted = norm(raw);
   if (!wanted) return null;
   const contacts = await allContacts();
@@ -136,6 +143,11 @@ export async function searchKnowledge(
   if (error) throw new Error(`Knowledge search: ${error.message}`);
   const meetings = await recentMeetings();
   const titleOf = (row: { meeting_id: string | null; metadata?: Record<string, unknown> | null }) => {
+    if (row.meeting_id && row.metadata?.attachment_id) {
+      // Attachment chunks are cited by file: the slide "Pricing.png" shared in Q4 Vendor Review.
+      const m = meetings.find((x) => x.id === row.meeting_id);
+      return attachmentCitation(row.metadata, m?.title ?? 'an older meeting');
+    }
     if (!row.meeting_id) {
       const name = typeof row.metadata?.name === 'string' ? row.metadata.name : null;
       return name ? `document "${name}"${typeof row.metadata?.page === 'number' ? ` p.${row.metadata.page}` : ''}` : 'company document';
@@ -163,9 +175,11 @@ export interface MeetingDetails {
   stats: string[];
   time_saved_minutes: number | null;
   gdoc_url: string | null;
+  attachments: { file: string; summary: string | null }[];
 }
 
 export async function meetingDetails(id: string): Promise<MeetingDetails | null> {
+  const files = supabase.from('meeting_attachments').select('name, kind, label, summary').eq('meeting_id', id).eq('status', 'ready').order('created_at');
   const { data, error } = await supabase
     .from('meetings')
     .select(
@@ -203,6 +217,8 @@ export async function meetingDetails(id: string): Promise<MeetingDetails | null>
     stats: (m.stats_mentioned ?? []).map((s: { value: string; context: string }) => `${s.value}: ${s.context}`),
     time_saved_minutes: m.time_saved_minutes,
     gdoc_url: m.gdoc_url,
+    // Files shared in the meeting (missing table -> none).
+    attachments: ((await files).data ?? []).map((a) => ({ file: attachmentCitation(a, m.title ?? 'this meeting'), summary: a.summary })),
   };
 }
 

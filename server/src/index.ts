@@ -3,7 +3,9 @@ import express, { type ErrorRequestHandler } from 'express';
 import multer from 'multer';
 import { config } from './config.js';
 import { warmUpEmbeddings } from './pipeline/embed.js';
+import { resumeAttachments } from './pipeline/attachments.js';
 import { appRouter } from './routes/app.js';
+import { attachmentsRouter } from './routes/attachments.js';
 import { chatRouter } from './routes/chat.js';
 import { knowledgeRouter } from './routes/knowledge.js';
 import { meetingsRouter } from './routes/meetings.js';
@@ -38,10 +40,11 @@ app.get('/health', (_req, res) => {
 app.use('/api', meetingsRouter);
 app.use('/api', appRouter);
 app.use('/api', knowledgeRouter);
+app.use('/api', attachmentsRouter);
 app.use('/v1', chatRouter);
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
-  const status = err instanceof multer.MulterError ? (err.code === 'LIMIT_FILE_SIZE' ? 413 : 400) : 500;
+  const status = err instanceof multer.MulterError ? (err.code === 'LIMIT_FILE_SIZE' ? 413 : 400) : typeof err?.status === 'number' ? err.status : 500;
   console.error('[http]', err);
   res.status(status).json({ error: err.message || 'Internal error' });
 };
@@ -67,6 +70,7 @@ app.listen(config.port, () => {
   console.log(`Tatva server on http://localhost:${config.port}`);
   if (!config.voiceApiKey) console.warn('[startup] VOICE_LLM_API_KEY is not set: the voice endpoint /v1/chat/completions is disabled.');
   failInterruptedMeetings();
+  resumeAttachments().catch(() => {});
   warmUpEmbeddings()
     .then(() => console.log('[startup] Embedding model ready'))
     .catch((err) => console.error('[startup] Embedding model failed to load:', err));

@@ -3,6 +3,8 @@ import tseslint from 'typescript-eslint';
 
 /** @type {import('eslint').Linter.Config[]} */
 const config = [
+  // Build output (server production build).
+  { ignores: ['server/dist/**'] },
   ...coreWebVitals,
   {
     plugins: {

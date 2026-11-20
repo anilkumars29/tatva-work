@@ -45,7 +45,7 @@ Web app endpoints (Milestone 4; the Next.js app calls them as `/tatva/*`; local 
 | `GET` | `/api/dashboard` | stats (meetings, open items, Tatva actions and time saved this week), meetings, open items |
 | `GET` | `/api/calendar/next` | next Google Calendar event (cached 60 s) |
 | `GET` | `/api/status` | Composio connection per toolkit (Gmail, Slack, Calendar, Sheets, Docs, Drive); cached 5 min, `?fresh=1` re-checks |
-| `GET/PUT` | `/api/profile` | the user's profile (name, role, email, avatar colour) for the web app; stored as `profile.json` in a private `settings` Storage bucket (created on first save), defaults from `DEMO_OWNER_EMAIL` |
+| `GET/PUT` | `/api/profile` | the user's profile (name, role, email, avatar colour) for the web app; stored as `profile.json` in a private `settings` Storage bucket (created on first save), defaults from `DEMO_OWNER_EMAIL`. Linked to the user's own contact (`contact_id`: same email, else same first name): saving copies name, email and role onto it, and the voice agent resolves "me" / "myself" to the profile email |
 | `GET` | `/api/meetings/:id/audio` | signed Storage URL for the recording (1 h) |
 | `POST` | `/api/meetings/:id/gdoc` | create the meeting's Google Doc if missing |
 | `POST` | `/api/actions/preview` | `{ kind, input }` → the read-back sentence (same as Pooja's) |
@@ -65,8 +65,9 @@ Web app endpoints (Milestone 4; the Next.js app calls them as `/tatva/*`; local 
 1. `server/.env` needs `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `GROQ_API_KEY`,
    `COMPOSIO_API_KEY` (template: [env.example](env.example)).
 2. Run [supabase/migrations/001_init.sql](supabase/migrations/001_init.sql),
-   [002_voice_agent.sql](supabase/migrations/002_voice_agent.sql) and
-   [003_web_app.sql](supabase/migrations/003_web_app.sql) once in
+   [002_voice_agent.sql](supabase/migrations/002_voice_agent.sql),
+   [003_web_app.sql](supabase/migrations/003_web_app.sql) and
+   [004_meeting_attachments.sql](supabase/migrations/004_meeting_attachments.sql) once in
    the Supabase dashboard → SQL Editor. It creates the tables, pgvector, the
    `meeting-audio` bucket and `match_knowledge_chunks`. RLS is on with no
    policies: only the server's secret key can access the data.
@@ -83,6 +84,8 @@ Web app endpoints (Milestone 4; the Next.js app calls them as `/tatva/*`; local 
 
 ```bash
 pnpm run dev         # http://localhost:4000, restarts on file changes
+pnpm build           # production build: compiles src/ to dist/ (tsconfig.build.json)
+pnpm start           # runs the build: node dist/index.js (reads .env if present)
 pnpm run test:e2e -- "<path to a recording.webm>" ["search question"]
 pnpm run typecheck
 pnpm test            # unit tests: date resolution, yes/no detection (no secrets needed; also run in CI)
@@ -93,6 +96,35 @@ pnpm run seed:demo-meetings  # voices 3 demo meetings with Murf Falcon (4 en-IN 
 
 The first start downloads the embedding model (~90 MB) into
 `node_modules/@huggingface/transformers/.cache`.
+
+## Meeting attachments
+
+PDFs and images (PNG, JPG, WebP) attached on a meeting page (upload, drag and
+drop, or Ctrl+V paste of a screenshot) are stored in the private `attachments`
+bucket and processed one at a time by `src/pipeline/attachments.ts`:
+
+- **PDF** (up to 25 MB): text per page with the same extraction as company documents.
+- **Image** (up to 15 MB): resized to at most 2000 px and sent to the Groq vision
+  model (`GROQ_VISION_MODEL`, default `qwen/qwen3.8-27b`), which returns JSON with a
+  label (slide, chart, table, diagram, screenshot, photo, document), every visible
+  text, a description of charts/tables/diagrams, and a one-line summary.
+- The text is chunked and embedded into `knowledge_chunks` with the meeting's
+  `meeting_id` (so `match_knowledge_chunks(filter_meeting_id)` scopes to one
+  meeting) and the `attachment_id` (chunks are deleted with the file). Search hits
+  are labelled `the slide "Pricing.png" shared in Q4 Vendor Review`, and Pooja is
+  told to start such answers with that citation.
+- When a file is indexed or deleted, the meeting's Google Doc is rewritten from the
+  database with an **Attachments** section (one line per file) via Composio
+  `GOOGLEDOCS_UPDATE_DOCUMENT_MARKDOWN`. Edits made by hand in that doc are replaced.
+
+| Method | Path | |
+| ------ | ---- | - |
+| `GET/POST` | `/api/meetings/:id/attachments` | list (with signed image preview URLs) / upload one file (`file` field, multipart) → 202 |
+| `GET` | `/api/attachments` | all attachments with their meeting (Knowledge Base) |
+| `GET` | `/api/attachments/:id` | one attachment with the extracted text |
+| `GET` | `/api/attachments/:id/url?download=1` | 10-minute signed URL |
+| `POST` | `/api/attachments/:id/retry` | re-process a failed attachment |
+| `DELETE` | `/api/attachments/:id` | delete file, row and chunks; refreshes the Google Doc |
 
 ## Notes
 

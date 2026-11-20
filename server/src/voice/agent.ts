@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import { localYmd } from '../pipeline/dates.js';
 import { cancelPending, executePending, getPending, isActionKind, proposeAction, UserFacingError, type PendingAction } from './actions.js';
 import { logActivity } from './activity.js';
+import { getProfile } from '../profile.js';
 import { allContacts, dateTimeLabel, dayLabel, recentMeetings, searchKnowledge } from './data.js';
 import { confirmationIntent, dropRepeat, speakable } from './speech.js';
 import { runReadTool, TOOLS } from './tools.js';
@@ -51,10 +52,11 @@ function nextMonday(): string {
 
 async function systemPrompt(sessionId: string, userText: string, pending: PendingAction | null): Promise<string> {
   const wordCount = userText.split(/\s+/).filter(Boolean).length;
-  const [meetings, contacts, hits] = await Promise.all([
+  const [meetings, contacts, hits, profile] = await Promise.all([
     recentMeetings().catch(() => []),
     allContacts().catch(() => []),
     wordCount >= 3 ? searchKnowledge(userText, { count: 4, threshold: 0.3 }).catch(() => []) : Promise.resolve([]),
+    getProfile().catch(() => null),
   ]);
   const now = new Date();
   const lines = [
@@ -62,7 +64,8 @@ async function systemPrompt(sessionId: string, userText: string, pending: Pendin
     ``,
     `How to speak: one to three short sentences. Plain spoken English only: no markdown, lists, bullet points, emojis, URLs or IDs. Say numbers and dates naturally. Ask at most one question.`,
     ``,
-    `What you know: answer from the knowledge base (recorded meetings and uploaded company documents) and tools, never invent meetings, people, decisions or numbers. If the context below does not answer the question, call a tool (get_meeting_details, search_knowledge, get_open_items). If it is still unknown, say you don't have that in your notes.`,
+    `What you know: answer from the knowledge base (recorded meetings, files shared in meetings, and uploaded company documents) and tools, never invent meetings, people, decisions or numbers. If the context below does not answer the question, call a tool (get_meeting_details, search_knowledge, get_open_items). If it is still unknown, say you don't have that in your notes.`,
+    `Sources: if your answer uses a match whose source is "attachment" (a slide, screenshot or PDF shared in a meeting), you must begin the answer with its citation, for example: "From the slide Pricing.png shared in Q4 Vendor Review, the new rate is 40,000 rupees a month." Use the exact file name and meeting from the match label.`,
     `"Brief me" or "prepare me for my next meeting" means call brief_me, then give the gist in a few sentences. "What's pending" or "what's still open" without a named meeting means get_open_items with no arguments.`,
     ``,
     `Actions: to email, post to Slack, create a calendar event, add to the tracker or log an issue (a bug, blocker or escalation: use log_issue), call that tool directly with your best arguments. Prefer passing the meeting so its content is included automatically. Only add calendar attendees the user explicitly names. Write no text in the same message as an action tool call. Do not ask for confirmation yourself and never say an action is done: the system reads the action back to the user and runs it only after they say yes. If a tool returns an error, briefly say what's missing and ask for it.`,
@@ -70,10 +73,11 @@ async function systemPrompt(sessionId: string, userText: string, pending: Pendin
     ``,
     `Recent meetings, newest first: ${meetings.slice(0, 6).map((m) => `${m.title} (${dayLabel(m.recorded_at ?? m.created_at)})`).join('; ') || 'none yet'}.`,
     `Contacts: ${contacts.map((c) => c.name).join(', ') || 'none'}.`,
+    profile ? `The user is ${profile.name}${profile.role ? `, ${profile.role}` : ''}. "Me" or "myself" means the user: pass "me" as the recipient and the system uses their profile email.` : ``,
   ];
   const facts = recall(sessionId);
   if (facts.length) lines.push(``, `Earlier in this call: ${facts.join(' | ')}`);
-  if (hits.length) lines.push(``, `Knowledge base matches for the user's last message:`, ...hits.map((h) => `- [${h.meeting}, ${h.source_type}] ${h.content}`));
+  if (hits.length) lines.push(``, `Knowledge base matches for the user's last message:`, ...hits.map((h) => (h.source_type === 'attachment' ? `- [${h.source_type}; cite as: "From ${h.meeting}"] ${h.content}` : `- [${h.meeting}, ${h.source_type}] ${h.content}`)));
   if (pending)
     lines.push(
       ``,

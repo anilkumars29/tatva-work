@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApi } from '@/hooks/use-api';
 import { api, clock, dueLabel, durationLabel, eventDateTime, initials, minutesLabel, plural, relativeDateTime } from '@/lib/tatva';
 import type { Contact, MeetingDetail } from './types';
+import { MeetingAttachments } from './Attachments';
 import { ComingSoon, EmptyState, Field, Icon, inputClass, Spinner, useTatvaUi } from './ui';
 
 const BARS = 64;
@@ -528,6 +529,8 @@ export default function MeetingDetails({ id }: { id: string }) {
                   </div>
                 )}
               </div>
+
+              <MeetingAttachments meetingId={id} meetingTitle={title} />
 
               <div className="flex flex-col gap-space-md rounded-xl bg-surface-container-low p-space-lg shadow-md border border-hairline">
                 <div className="flex flex-col justify-between gap-space-sm sm:flex-row sm:items-center">
