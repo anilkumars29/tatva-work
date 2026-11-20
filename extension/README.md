@@ -1,16 +1,26 @@
-# Tatva Work Recorder (Chrome extension)
+# Tatva Recorder (Chrome extension)
 
 Manifest V3 extension that records a browser meeting (Google Meet / Teams web):
 the meeting tab's audio **and** your microphone, mixed into one WebM/Opus file.
 The meeting stays audible while it records.
 
-On Stop it saves a local backup to `Downloads/Tatva Work/meeting_<date>_<time>.webm`
-and uploads the recording to the Tatva Work server (`http://localhost:4000`, see
+On Stop it saves a local backup to `Downloads/Tatva/meeting_<date>_<time>.webm`
+and uploads the recording to the Tatva server (`http://localhost:4000`, see
 [../server/README.md](../server/README.md)). The popup then shows Uploading… →
 Processing… (stage) → Ready with the meeting title, time saved, and links to the
 Google Doc and the meeting JSON.
 
 No build step: plain JavaScript, load the folder unpacked. Requires Chrome 116+.
+
+### Reloading after an update
+
+After pulling changes (current version **0.4.0**): open `chrome://extensions`,
+find **Tatva Recorder** and press its reload icon (or *Load unpacked* → this
+`extension/` folder if it isn't installed). Then reload the Tatva web app tab
+(`http://localhost:3000`): content scripts only attach to pages loaded after
+the extension. The sidebar shows **Extension connected**, and the avatar menu
+shows the version. If it still says *not detected*, check the extension's
+*Details → Site access* allows `localhost` (or is "On all sites").
 
 ## Files
 
@@ -20,6 +30,8 @@ No build step: plain JavaScript, load the folder unpacked. Requires Chrome 116+.
 | `popup.html/js/css` | Start/Stop button, running timer, status and messages |
 | `service-worker.js` | Owns recording + upload state (`chrome.storage.session`), creates/closes the offscreen document, saves the backup with `chrome.downloads`, polls meeting status from the server, shows the `REC` badge |
 | `offscreen.html/js` | Captures tab audio (tab-capture stream ID) and mic, mixes them with Web Audio, records with `MediaRecorder` (Opus 48 kbps), plays tab audio back so you can hear the meeting, uploads the recording |
+| `page-marker.js` | Content script on `localhost:3000` only: marks `<html data-tatva-extension="<version>">` (re-applied if the page re-renders it) and answers a `tatva:extension-ping` window message, so the web app can show "Extension connected". Reads nothing from the page |
+| `icons/` | Tatva mark at 16/32/48/128 px (generated from `public/brand`) |
 | `permission.html/js` | One-time page that grants the extension microphone access (offscreen documents cannot show a permission prompt) |
 
 ## How it works

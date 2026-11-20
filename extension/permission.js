@@ -13,7 +13,7 @@ async function requestMic() {
     stream.getTracks().forEach((track) => track.stop());
     result.className = 'ok';
     result.textContent =
-      'Microphone allowed. Go back to your meeting tab, open Tatva Work and press Start recording. This tab will close.';
+      'Microphone allowed. Go back to your meeting tab, open Tatva and press Start recording. This tab will close.';
     setTimeout(() => window.close(), 4000);
   } catch (err) {
     result.className = 'err';

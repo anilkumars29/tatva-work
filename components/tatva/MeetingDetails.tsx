@@ -213,7 +213,7 @@ export default function MeetingDetails({ id }: { id: string }) {
         attendees: d.people,
         discuss_later_id: d.id,
         skip_unknown_attendees: true,
-        description: `Follow-up from "${m?.title ?? 'a meeting'}". Scheduled by Tatva Work.`,
+        description: `Follow-up from "${m?.title ?? 'a meeting'}". Scheduled by Tatva.`,
       },
       fields: (set, input) => (
         <>
@@ -270,7 +270,7 @@ export default function MeetingDetails({ id }: { id: string }) {
             <div className="mt-space-xs flex flex-wrap items-center gap-space-md">
               <h1 className="font-headline-xl text-headline-xl font-extrabold tracking-tight text-on-surface">{title}</h1>
               <div className="flex items-center gap-1.5 rounded-full bg-surface-container-high px-2.5 py-1">
-                <span className={`h-2 w-2 rounded-full ${ready ? 'bg-tertiary-fixed shadow-[0_0_8px_rgba(111,251,190,0.8)]' : m.status === 'failed' ? 'bg-error' : 'animate-pulse bg-primary-container'}`} />
+                <span className={`h-2 w-2 rounded-full ${ready ? 'bg-tertiary-fixed' : m.status === 'failed' ? 'bg-error' : 'animate-pulse bg-primary-container'}`} />
                 <span className={`font-label-sm text-label-sm font-semibold uppercase tracking-wider ${ready ? 'text-tertiary' : m.status === 'failed' ? 'text-error' : 'text-primary-fixed'}`}>
                   {ready ? 'Ready' : m.status === 'failed' ? 'Failed' : m.status}
                 </span>
@@ -282,18 +282,18 @@ export default function MeetingDetails({ id }: { id: string }) {
           </div>
           {ready && (
             <div className="flex flex-wrap items-center gap-space-sm self-start md:self-center">
-              <button type="button" onClick={openDoc} className="inline-flex items-center gap-space-xs rounded-lg bg-surface-container px-space-md py-space-sm font-label-md text-label-md text-on-surface shadow-sm transition-all hover:bg-surface-container-high">
+              <button type="button" onClick={openDoc} className="inline-flex items-center gap-space-xs rounded-lg bg-surface-container px-space-md py-space-sm font-label-md text-label-md text-on-surface shadow-sm transition-all hover:bg-surface-container-high border border-hairline">
                 <Icon name="description" className="text-body-lg text-on-surface-variant" />
                 <span>{m.gdoc_url ? 'Open Google Doc' : 'Create Google Doc'}</span>
               </button>
-              <button type="button" onClick={sendEmail} className="inline-flex items-center gap-space-xs rounded-lg bg-surface-container px-space-md py-space-sm font-label-md text-label-md text-on-surface shadow-sm transition-all hover:bg-surface-container-high">
+              <button type="button" onClick={sendEmail} className="inline-flex items-center gap-space-xs rounded-lg bg-surface-container px-space-md py-space-sm font-label-md text-label-md text-on-surface shadow-sm transition-all hover:bg-surface-container-high border border-hairline">
                 <Icon name="mail" className="text-body-lg text-on-surface-variant" />
                 <span>Send by email</span>
               </button>
               <button
                 type="button"
                 onClick={sendSlack}
-                className="inline-flex items-center gap-space-xs rounded-lg bg-primary-container px-space-md py-space-sm font-label-md text-label-md text-on-primary-fixed shadow-[0_0_16px_rgba(255,212,0,0.3)] transition-all hover:bg-primary-fixed active:scale-[0.98]"
+                className="inline-flex items-center gap-space-xs rounded-lg bg-primary-container px-space-md py-space-sm font-label-md text-label-md text-on-primary-fixed transition-all hover:bg-primary-fixed active:scale-[0.98]"
               >
                 <Icon name="send" className="text-body-lg" />
                 <span className="font-bold">Send to Slack</span>
@@ -303,7 +303,7 @@ export default function MeetingDetails({ id }: { id: string }) {
         </div>
 
         {!ready && (
-          <div className="flex items-center gap-space-sm rounded-xl bg-surface-container-low p-space-md text-on-surface-variant">
+          <div className="flex items-center gap-space-sm rounded-xl bg-surface-container-low p-space-md text-on-surface-variant border border-hairline">
             {m.status === 'failed' ? <Icon name="error" className="text-error" /> : <Spinner />}
             <span className="font-body-md text-body-md">{m.status === 'failed' ? `Processing failed: ${m.error ?? 'unknown error'}` : `Processing: ${m.status}… this page updates automatically.`}</span>
           </div>
@@ -311,7 +311,7 @@ export default function MeetingDetails({ id }: { id: string }) {
 
         {/* Audio player */}
         {m.audio_path && (
-          <div className="relative flex flex-col items-center gap-space-lg overflow-hidden rounded-xl bg-surface-container-lowest p-space-md shadow-2xl md:flex-row">
+          <div className="relative flex flex-col items-center gap-space-lg overflow-hidden rounded-xl bg-surface-container-lowest p-space-md shadow-2xl md:flex-row border border-hairline">
             {audioUrl && (
               <audio
                 ref={audioRef}
@@ -335,7 +335,7 @@ export default function MeetingDetails({ id }: { id: string }) {
                 aria-label={playing ? 'Pause' : 'Play'}
                 disabled={!audioUrl}
                 onClick={toggle}
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-container text-on-primary-fixed shadow-[0_0_20px_rgba(255,212,0,0.4)] transition-all hover:scale-105 active:scale-95 disabled:opacity-40"
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-container text-on-primary-fixed transition-all hover:scale-105 active:scale-95 disabled:opacity-40"
               >
                 {audioUrl ? <Icon name={playing ? 'pause' : 'play_arrow'} className="text-headline-sm" filled /> : <Spinner className="text-headline-sm" />}
               </button>
@@ -362,8 +362,8 @@ export default function MeetingDetails({ id }: { id: string }) {
                 }}
               >
                 {total > 0 && (
-                  <div className="absolute bottom-0 top-0 z-20 w-0.5 bg-primary-container shadow-[0_0_10px_#ffd400]" style={{ left: `${played * 100}%` }}>
-                    <div className="absolute -top-1 -ml-1 h-2.5 w-2.5 rounded-full bg-primary-container shadow-[0_0_8px_#ffd400]" />
+                  <div className="absolute bottom-0 top-0 z-20 w-0.5 bg-primary-container" style={{ left: `${played * 100}%` }}>
+                    <div className="absolute -top-1 -ml-1 h-2.5 w-2.5 rounded-full bg-primary-container" />
                   </div>
                 )}
                 {total > 0 &&
@@ -379,7 +379,7 @@ export default function MeetingDetails({ id }: { id: string }) {
                       className="group absolute -top-2 z-30 -translate-x-1/2"
                       style={{ left: `${Math.min(100, (k.timestamp_sec / total) * 100)}%` }}
                     >
-                      <span className="block h-2 w-2 rounded-full bg-primary-container shadow-[0_0_6px_#ffd400]" />
+                      <span className="block h-2 w-2 rounded-full bg-primary-container" />
                       <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-surface-container-high px-2 py-0.5 font-caption text-caption text-primary-container opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
                         {clock(k.timestamp_sec)} · {k.note.length > 40 ? `${k.note.slice(0, 40)}…` : k.note}
                       </span>
@@ -433,10 +433,10 @@ export default function MeetingDetails({ id }: { id: string }) {
         {ready && (
           <div className="grid grid-cols-1 gap-space-xl lg:grid-cols-12">
             <div className="flex flex-col gap-space-xl lg:col-span-8">
-              <div className="relative flex flex-col gap-space-md overflow-hidden rounded-xl bg-surface-container-low p-space-lg shadow-md">
+              <div className="relative flex flex-col gap-space-md overflow-hidden rounded-xl bg-surface-container-low p-space-lg shadow-md border border-hairline">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-space-xs">
-                    <Icon name="auto_awesome" className="text-headline-sm text-primary-container" filled />
+                    <Icon name="auto_awesome" className="text-headline-sm text-on-surface-variant" filled />
                     <h2 className="font-headline-sm text-headline-sm font-bold text-on-surface">Executive Summary</h2>
                   </div>
                   <span className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">AI Generated</span>
@@ -444,9 +444,9 @@ export default function MeetingDetails({ id }: { id: string }) {
                 <p className="font-body-lg text-body-lg leading-relaxed text-on-surface-variant">{m.summary ?? 'No summary.'}</p>
               </div>
 
-              <div className="flex flex-col gap-space-md rounded-xl bg-surface-container-low p-space-lg shadow-md">
+              <div className="flex flex-col gap-space-md rounded-xl bg-surface-container-low p-space-lg shadow-md border border-hairline">
                 <div className="flex items-center gap-space-sm">
-                  <Icon name="gavel" className="text-headline-sm text-primary-container" />
+                  <Icon name="gavel" className="text-headline-sm text-on-surface-variant" />
                   <h2 className="font-headline-sm text-headline-sm font-bold text-on-surface">Key Decisions ({m.decisions.length})</h2>
                 </div>
                 {m.decisions.length === 0 ? (
@@ -454,7 +454,7 @@ export default function MeetingDetails({ id }: { id: string }) {
                 ) : (
                   <div className="flex flex-col gap-space-sm">
                     {m.decisions.map((d, i) => (
-                      <div key={i} className="flex items-start gap-space-md rounded-lg bg-surface-container p-space-md">
+                      <div key={i} className="flex items-start gap-space-md rounded-lg bg-surface-container p-space-md border border-hairline">
                         <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-container text-on-primary-fixed">
                           <Icon name="check" className="text-body-sm font-black" />
                         </div>
@@ -468,10 +468,10 @@ export default function MeetingDetails({ id }: { id: string }) {
                 )}
               </div>
 
-              <div className="flex flex-col gap-space-md rounded-xl bg-surface-container-low p-space-lg shadow-md">
+              <div className="flex flex-col gap-space-md rounded-xl bg-surface-container-low p-space-lg shadow-md border border-hairline">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-space-sm">
-                    <Icon name="task_alt" className="text-headline-sm text-primary-container" />
+                    <Icon name="task_alt" className="text-headline-sm text-on-surface-variant" />
                     <h2 className="font-headline-sm text-headline-sm font-bold text-on-surface">Action Items ({m.action_items.length})</h2>
                   </div>
                   <button type="button" disabled title="Coming soon" className="inline-flex cursor-not-allowed items-center gap-space-xs font-label-sm text-label-sm text-on-surface-variant opacity-60">
@@ -511,7 +511,7 @@ export default function MeetingDetails({ id }: { id: string }) {
                             <td className="px-space-md py-space-md">
                               {a.status === 'done' ? (
                                 <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-container-high px-2.5 py-0.5 font-label-sm text-label-sm font-semibold text-tertiary">
-                                  <span className="h-1.5 w-1.5 rounded-full bg-tertiary-fixed shadow-[0_0_6px_rgba(111,251,190,0.8)]" />
+                                  <span className="h-1.5 w-1.5 rounded-full bg-tertiary-fixed" />
                                   Done
                                 </span>
                               ) : (
@@ -529,13 +529,13 @@ export default function MeetingDetails({ id }: { id: string }) {
                 )}
               </div>
 
-              <div className="flex flex-col gap-space-md rounded-xl bg-surface-container-low p-space-lg shadow-md">
+              <div className="flex flex-col gap-space-md rounded-xl bg-surface-container-low p-space-lg shadow-md border border-hairline">
                 <div className="flex flex-col justify-between gap-space-sm sm:flex-row sm:items-center">
                   <div className="flex items-center gap-space-sm">
-                    <Icon name="graphic_eq" className="text-headline-sm text-primary-container" />
+                    <Icon name="graphic_eq" className="text-headline-sm text-on-surface-variant" />
                     <h2 className="font-headline-sm text-headline-sm font-bold text-on-surface">Transcript</h2>
                   </div>
-                  <div className="flex w-full max-w-xs items-center gap-space-xs rounded-lg bg-surface-container-lowest px-3 py-1.5">
+                  <div className="flex w-full max-w-xs items-center gap-space-xs rounded-lg bg-surface-container-lowest px-3 py-1.5 border border-hairline">
                     <Icon name="search" className="text-body-md text-on-surface-variant" />
                     <input
                       value={query}
@@ -560,7 +560,7 @@ export default function MeetingDetails({ id }: { id: string }) {
                             if (el) lineRefs.current.set(s.position, el);
                           }}
                           onClick={() => seek(Number(s.start_sec))}
-                          className={`flex cursor-pointer flex-col gap-1 rounded-lg bg-surface-container-high p-space-md shadow-[0_0_24px_rgba(255,212,0,0.12)] ${active ? 'ring-1 ring-primary-container' : ''}`}
+                          className={`flex cursor-pointer flex-col gap-1 rounded-lg bg-surface-container-high p-space-md ${active ? 'ring-1 ring-primary-container' : ''}`}
                         >
                           <div className="flex items-center justify-between gap-space-sm">
                             <span className="font-mono text-body-sm font-bold text-primary-container">{clock(Number(s.start_sec))}</span>
@@ -588,7 +588,7 @@ export default function MeetingDetails({ id }: { id: string }) {
             </div>
 
             <div className="flex flex-col gap-space-xl lg:col-span-4">
-              <div className="flex flex-col gap-space-md rounded-xl bg-surface-container-low p-space-lg shadow-md">
+              <div className="flex flex-col gap-space-md rounded-xl bg-surface-container-low p-space-lg shadow-md border border-hairline">
                 <div className="flex items-center justify-between">
                   <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">Numbers Mentioned</h3>
                   <Icon name="tag" className="text-body-lg text-on-surface-variant" />
@@ -604,7 +604,7 @@ export default function MeetingDetails({ id }: { id: string }) {
                         disabled={st.timestamp_sec == null || !audioUrl}
                         onClick={() => st.timestamp_sec != null && seek(st.timestamp_sec)}
                         title={st.timestamp_sec != null ? `Play from ${clock(st.timestamp_sec)}` : undefined}
-                        className="flex items-center justify-between rounded-lg bg-surface-container p-space-md text-left shadow-sm transition-colors enabled:hover:bg-surface-container-high disabled:cursor-default"
+                        className="flex items-center justify-between rounded-lg bg-surface-container p-space-md text-left shadow-sm transition-colors enabled:hover:bg-surface-container-high disabled:cursor-default border border-hairline"
                       >
                         <div className="flex min-w-0 flex-col">
                           <span
@@ -623,7 +623,7 @@ export default function MeetingDetails({ id }: { id: string }) {
                 )}
               </div>
 
-              <div className="flex flex-col gap-space-md rounded-xl bg-surface-container-low p-space-lg shadow-md">
+              <div className="flex flex-col gap-space-md rounded-xl bg-surface-container-low p-space-lg shadow-md border border-hairline">
                 <div className="flex items-center justify-between">
                   <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">Key Moments</h3>
                   <span className="font-label-sm text-label-sm uppercase text-on-surface-variant">{plural(moments.length, 'marker')}</span>
@@ -641,7 +641,7 @@ export default function MeetingDetails({ id }: { id: string }) {
                         className={`group flex items-center justify-between gap-space-sm rounded-lg p-space-sm text-left transition-colors ${current ? 'bg-surface-container-high shadow-sm' : 'bg-surface-container hover:bg-surface-container-high'}`}
                       >
                         <div className="flex min-w-0 items-center gap-space-sm">
-                          <span className="shrink-0 rounded bg-surface-container-lowest px-2 py-0.5 font-mono text-body-sm font-bold text-primary-container">{clock(k.timestamp_sec)}</span>
+                          <span className="shrink-0 rounded bg-surface-container-lowest px-2 py-0.5 font-mono text-body-sm text-on-surface-variant">{clock(k.timestamp_sec)}</span>
                           <span className={`font-body-sm text-body-sm transition-colors group-hover:text-primary ${current ? 'font-semibold text-primary' : 'text-on-surface'}`}>{k.note}</span>
                         </div>
                         <Icon name="play_arrow" className={`text-body-sm ${current ? 'text-primary-container' : 'text-on-surface-variant group-hover:text-primary-container'}`} filled={current} />
@@ -651,7 +651,7 @@ export default function MeetingDetails({ id }: { id: string }) {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-space-md rounded-xl bg-surface-container-low p-space-lg shadow-md">
+              <div className="flex flex-col gap-space-md rounded-xl bg-surface-container-low p-space-lg shadow-md border border-hairline">
                 <div className="flex items-center justify-between">
                   <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">Discuss Later</h3>
                   <Icon name="schedule" className="text-body-lg text-on-surface-variant" />
@@ -659,7 +659,7 @@ export default function MeetingDetails({ id }: { id: string }) {
                 <div className="flex flex-col gap-space-sm">
                   {m.discuss_later.length === 0 && <p className="font-body-sm text-body-sm text-on-surface-variant">Nothing was parked for later.</p>}
                   {m.discuss_later.map((d) => (
-                    <div key={d.id} className="flex flex-col gap-space-sm rounded-lg bg-surface-container p-space-md">
+                    <div key={d.id} className="flex flex-col gap-space-sm rounded-lg bg-surface-container p-space-md border border-hairline">
                       <div className="flex items-start justify-between gap-space-sm">
                         <div>
                           <h4 className="font-label-md text-label-md font-bold text-on-surface">{d.topic.replace(/^./, (c) => c.toUpperCase())}</h4>
@@ -696,10 +696,10 @@ export default function MeetingDetails({ id }: { id: string }) {
                 </div>
               </div>
 
-              <div className="relative flex items-center justify-between overflow-hidden rounded-xl bg-surface-container-lowest p-space-lg shadow-xl">
+              <div className="relative flex items-center justify-between overflow-hidden rounded-xl bg-surface-container-lowest p-space-lg shadow-xl border border-hairline">
                 <div className="z-10 flex flex-col gap-0.5">
                   <span className="font-caption text-caption font-semibold uppercase tracking-widest text-on-surface-variant">Time saved by Tatva</span>
-                  <span className="font-headline-xl text-headline-xl font-extrabold tracking-tight text-primary-container">~{minutesLabel(m.time_saved_minutes ?? 0)}</span>
+                  <span className="font-mono text-headline-xl font-medium tracking-tight text-primary-container">~{minutesLabel(m.time_saved_minutes ?? 0)}</span>
                   <p className="font-caption text-caption text-secondary-fixed-dim">
                     {m.time_saved_breakdown.length ? m.time_saved_breakdown.map((b) => `${b.task} (${b.minutes} min)`).join(', ') : 'Notes and captured items'}
                   </p>
@@ -709,8 +709,8 @@ export default function MeetingDetails({ id }: { id: string }) {
                 </div>
               </div>
               {openItems > 0 && (
-                <Link href={`/talk?meeting=${m.id}`} className="flex items-center justify-center gap-2 rounded-xl bg-surface-container-low px-space-md py-space-sm font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container">
-                  <Icon name="graphic_eq" className="text-primary-container" />
+                <Link href={`/talk?meeting=${m.id}`} className="flex items-center justify-center gap-2 rounded-xl bg-surface-container-low px-space-md py-space-sm font-label-md text-label-md text-on-surface transition-colors hover:bg-surface-container border border-hairline">
+                  <Icon name="graphic_eq" className="text-on-surface-variant" />
                   Ask Tatva about this meeting
                 </Link>
               )}

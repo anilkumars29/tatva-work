@@ -9,7 +9,7 @@ export function Icon({ name, className = '', filled = false }: { name: string; c
     <span
       aria-hidden="true"
       className={`material-symbols-outlined select-none ${className}`}
-      style={filled ? { fontVariationSettings: "'FILL' 1" } : undefined}
+      style={filled ? { fontVariationSettings: "'FILL' 1, 'wght' 300, 'GRAD' 0, 'opsz' 20" } : undefined}
     >
       {name}
     </span>
@@ -112,7 +112,7 @@ export function TatvaUiProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             role="status"
-            className={`pointer-events-auto flex items-start gap-space-sm rounded-xl bg-surface-container-high p-space-md shadow-[0_8px_32px_-4px_rgba(0,0,0,0.8)] ${
+            className={`pointer-events-auto flex items-start gap-space-sm rounded-xl bg-surface-container-high p-space-md shadow-popover ${
               t.tone === 'error' ? 'ring-1 ring-error/60' : t.tone === 'success' ? 'ring-1 ring-tertiary-fixed/40' : ''
             }`}
           >
@@ -130,7 +130,7 @@ export function TatvaUiProvider({ children }: { children: ReactNode }) {
 
 // ------------------------------------------------------------------- dialogs
 
-function DialogFrame({ title, icon, onClose, children }: { title: string; icon?: string; onClose: () => void; children: ReactNode }) {
+export function DialogFrame({ title, icon, onClose, children }: { title: string; icon?: string; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -138,10 +138,10 @@ function DialogFrame({ title, icon, onClose, children }: { title: string; icon?:
   }, [onClose]);
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-space-md backdrop-blur-md" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div role="dialog" aria-modal="true" aria-label={title} className="flex w-full max-w-lg flex-col gap-space-lg rounded-2xl bg-surface-container-low p-space-xl shadow-[0_24px_64px_rgba(0,0,0,0.85),0_0_32px_rgba(255,212,0,0.08)]">
+      <div role="dialog" aria-modal="true" aria-label={title} className="flex w-full max-w-lg flex-col gap-space-lg rounded-2xl bg-surface-container-low p-space-xl shadow-2xl border border-hairline">
         <div className="flex items-start justify-between gap-space-md">
           <div className="flex items-center gap-space-sm">
-            {icon && <Icon name={icon} className="text-headline-sm text-primary-container" />}
+            {icon && <Icon name={icon} className="text-headline-sm text-on-surface-variant" />}
             <h2 className="font-headline-md text-headline-md text-on-surface">{title}</h2>
           </div>
           <button type="button" aria-label="Close dialog" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-container-high text-on-surface-variant transition-colors hover:bg-surface-bright hover:text-on-surface">
@@ -191,8 +191,8 @@ function ActionDialog({ request, onClose, toast }: { request: ActionRequest; onC
   return (
     <DialogFrame title={request.title} icon={request.icon} onClose={onClose}>
       {request.fields && <div className="flex flex-col gap-space-md">{request.fields((patch) => setInput((i) => ({ ...i, ...patch })), input)}</div>}
-      <div className="flex items-start gap-space-sm rounded-xl bg-surface-container-lowest p-space-md">
-        <Icon name="record_voice_over" className="mt-0.5 text-body-lg text-primary-container" />
+      <div className="flex items-start gap-space-sm rounded-xl bg-surface-container-lowest p-space-md border border-hairline">
+        <Icon name="record_voice_over" className="mt-0.5 text-body-lg text-on-surface-variant" />
         <div className="flex flex-col gap-1">
           <span className="font-label-sm text-label-sm uppercase tracking-wider text-primary-container">Tatva will</span>
           {summary ? (
@@ -214,7 +214,7 @@ function ActionDialog({ request, onClose, toast }: { request: ActionRequest; onC
           type="button"
           disabled={!summary || busy}
           onClick={confirm}
-          className="inline-flex items-center gap-2 rounded-xl bg-primary-container px-space-xl py-2.5 font-label-md text-label-md font-bold text-on-primary shadow-[0_0_16px_rgba(255,212,0,0.35)] transition-all hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-xl bg-primary-container px-space-xl py-2.5 font-label-md text-label-md font-bold text-on-primary transition-all hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy && <Spinner className="text-body-md" />}
           {request.confirmLabel ?? 'Confirm'}
@@ -250,7 +250,7 @@ function PlainDialog({ request, onClose, toast }: { request: ConfirmRequest; onC
           disabled={busy}
           onClick={run}
           className={`inline-flex items-center gap-2 rounded-xl px-space-xl py-2.5 font-label-md text-label-md font-bold transition-all active:scale-[0.98] disabled:opacity-50 ${
-            request.tone === 'danger' ? 'bg-error-container text-on-error-container hover:bg-error hover:text-on-error' : 'bg-primary-container text-on-primary shadow-[0_0_16px_rgba(255,212,0,0.35)] hover:brightness-105'
+            request.tone === 'danger' ? 'bg-error-container text-on-error-container hover:bg-error hover:text-on-error' : 'bg-primary-container text-on-primary hover:brightness-105'
           }`}
         >
           {busy && <Spinner className="text-body-md" />}

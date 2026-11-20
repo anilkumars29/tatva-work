@@ -170,7 +170,7 @@ export default function Tracker() {
         </div>
         <div className="flex flex-wrap items-center gap-space-md">
           <div className="flex items-center gap-2 rounded-full bg-surface-container-low px-space-md py-2 font-caption text-caption text-on-surface-variant shadow-sm">
-            <span className={`h-2 w-2 rounded-full ${error ? 'bg-error' : 'bg-tertiary-fixed shadow-[0_0_8px_rgba(111,251,190,0.8)]'}`} />
+            <span className={`h-2 w-2 rounded-full ${error ? 'bg-error' : 'bg-tertiary-fixed'}`} />
             <span>
               {error ? 'Sync paused: server unreachable' : 'Live Sync active'} <span className="text-secondary/40">·</span>{' '}
               {ago == null ? 'Loading…' : ago < 15 ? 'Updated just now' : `Updated ${ago < 60 ? `${ago}s` : `${Math.round(ago / 60)}m`} ago`}
@@ -179,7 +179,7 @@ export default function Tracker() {
           <button
             type="button"
             onClick={logIssue}
-            className="inline-flex items-center gap-space-sm rounded-lg bg-surface-container px-space-md py-2 font-label-md text-label-md text-on-surface shadow-sm transition-all hover:bg-surface-container-high hover:text-error active:scale-[0.99]"
+            className="inline-flex items-center gap-space-sm rounded-lg bg-surface-container px-space-md py-2 font-label-md text-label-md text-on-surface shadow-sm transition-all hover:bg-surface-container-high hover:text-error active:scale-[0.99] border border-hairline"
           >
             <Icon name="report" className="text-[18px] text-error" />
             <span>Log issue</span>
@@ -190,7 +190,7 @@ export default function Tracker() {
             rel="noopener noreferrer"
             aria-disabled={!sheet.data}
             onClick={(e) => !sheet.data && e.preventDefault()}
-            className={`inline-flex items-center gap-space-sm rounded-lg bg-surface-container px-space-md py-2 font-label-md text-label-md text-on-surface shadow-sm transition-all hover:bg-surface-container-high hover:text-primary-container active:scale-[0.99] ${sheet.data ? '' : 'opacity-50'}`}
+            className={`inline-flex items-center gap-space-sm rounded-lg bg-surface-container px-space-md py-2 font-label-md text-label-md text-on-surface shadow-sm transition-all hover:bg-surface-container-high hover:text-primary-container active:scale-[0.99] ${sheet.data ? '' : 'opacity-50'} border border-hairline`}
           >
             <Icon name="table_chart" className="text-[18px] text-tertiary-container" />
             <span>Open in Google Sheets</span>
@@ -200,7 +200,7 @@ export default function Tracker() {
       </div>
 
       <div className="grid grid-cols-1 gap-space-md sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi label="Total Commitments" value={counts.all} icon="task_alt" tone="text-on-surface" iconTone="text-primary-container" />
+        <Kpi label="Total Commitments" value={counts.all} icon="task_alt" tone="text-on-surface" iconTone="text-on-surface-variant" />
         <Kpi label="Pending Execution" value={counts.pending} icon="pending_actions" tone="text-primary-fixed-dim" iconTone="text-primary-fixed-dim" />
         <Kpi label="Completed" value={counts.done} icon="verified" tone="text-tertiary-fixed" iconTone="text-tertiary-fixed" />
         <Kpi label="Attention Needed" value={counts.attention} icon="error" tone="text-error" iconTone="text-error" iconBg="bg-error-container/40" title="Open issues and overdue items" />
@@ -213,7 +213,7 @@ export default function Tracker() {
 
       {view === 'items' ? (
         <>
-          <div className="flex flex-col justify-between gap-space-md rounded-xl bg-surface-container-low p-space-sm lg:flex-row lg:items-center">
+          <div className="flex flex-col justify-between gap-space-md rounded-xl bg-surface-container-low p-space-sm lg:flex-row lg:items-center border border-hairline">
             <div className="flex flex-wrap items-center gap-space-xs">
               {(
                 [
@@ -228,7 +228,7 @@ export default function Tracker() {
                   type="button"
                   onClick={() => setFilter(id)}
                   className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 font-label-sm text-label-sm transition-colors ${
-                    filter === id ? 'bg-primary-container text-on-primary-container shadow-[0_0_12px_rgba(255,212,0,0.2)]' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
+                    filter === id ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
                   }`}
                 >
                   <span>{label}</span>
@@ -251,7 +251,7 @@ export default function Tracker() {
                 type="button"
                 title={`Sort: ${SORT_LABEL[sort]} (click to change)`}
                 onClick={() => setSort((s) => (s === 'due' ? 'newest' : s === 'newest' ? 'owner' : 'due'))}
-                className="flex items-center gap-1 rounded-lg bg-surface-container p-2 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface"
+                className="flex items-center gap-1 rounded-lg bg-surface-container p-2 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface border border-hairline"
               >
                 <Icon name="sort" className="text-[20px]" />
                 <span className="hidden font-caption text-caption xl:inline">{SORT_LABEL[sort]}</span>
@@ -262,14 +262,14 @@ export default function Tracker() {
                 aria-label="Export current view as CSV"
                 disabled={!filtered.length}
                 onClick={exportCsv}
-                className="rounded-lg bg-surface-container p-2 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface disabled:opacity-40"
+                className="rounded-lg bg-surface-container p-2 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface disabled:opacity-40 border border-hairline"
               >
                 <Icon name="file_download" className="text-[20px]" />
               </button>
             </div>
           </div>
 
-          <div className="flex flex-col overflow-hidden rounded-xl bg-surface-container-low shadow-sm">
+          <div className="flex flex-col overflow-hidden rounded-xl bg-surface-container-low shadow-sm border border-hairline">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[980px] border-collapse text-left">
                 <thead>
@@ -316,14 +316,14 @@ export default function Tracker() {
                         </td>
                         <td className="px-space-md py-space-md">
                           {i.meeting_id ? (
-                            <Link href={`/meetings/${i.meeting_id}`} className="inline-flex items-center gap-1.5 rounded-lg bg-surface-container px-2.5 py-1 font-caption text-caption text-on-surface transition-colors hover:bg-surface-variant">
-                              <Icon name={issue ? 'priority_high' : 'groups'} className={`text-[14px] ${issue ? 'text-error' : 'text-primary-container'}`} />
+                            <Link href={`/meetings/${i.meeting_id}`} className="inline-flex items-center gap-1.5 rounded-lg bg-surface-container px-2.5 py-1 font-caption text-caption text-on-surface transition-colors hover:bg-surface-variant border border-hairline">
+                              <Icon name={issue ? 'priority_high' : 'groups'} className={`text-[14px] ${issue ? 'text-error' : 'text-on-surface-variant'}`} />
                               <span>{i.meeting}</span>
                               {i.meeting_date && <span className="text-on-surface-variant">· {relativeDateTime(i.meeting_date).split(',')[0]}</span>}
                             </Link>
                           ) : (
-                            <span className="inline-flex items-center gap-1.5 rounded-lg bg-surface-container px-2.5 py-1 font-caption text-caption text-on-surface-variant">
-                              <Icon name="mic" className="text-[14px] text-primary-container" />
+                            <span className="inline-flex items-center gap-1.5 rounded-lg bg-surface-container px-2.5 py-1 font-caption text-caption text-on-surface-variant border border-hairline">
+                              <Icon name="mic" className="text-[14px] text-on-surface-variant" />
                               {i.source === 'web' ? 'Logged in the app' : 'Logged by voice'}
                             </span>
                           )}
@@ -409,13 +409,13 @@ export default function Tracker() {
                 aria-haspopup="listbox"
                 aria-expanded={menuOpen}
                 onClick={() => setMenuOpen((o) => !o)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-surface-container-low px-3 py-1.5 font-label-md text-label-md text-on-surface shadow-sm transition-colors hover:bg-surface-container"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-surface-container-low px-3 py-1.5 font-label-md text-label-md text-on-surface shadow-sm transition-colors hover:bg-surface-container border border-hairline"
               >
                 <Icon name="filter_list" className="text-[18px] text-on-surface-variant" />
                 <span>{connector}</span>
               </button>
               {menuOpen && (
-                <div role="listbox" className="absolute right-0 z-30 mt-1 w-48 overflow-hidden rounded-xl bg-surface-container-high shadow-[0_8px_32px_-4px_rgba(0,0,0,0.8)]">
+                <div role="listbox" className="absolute right-0 z-30 mt-1 w-48 overflow-hidden rounded-xl bg-surface-container-high shadow-popover">
                   {CONNECTOR_OPTIONS.map((c) => (
                     <button
                       key={c}
@@ -436,7 +436,7 @@ export default function Tracker() {
               )}
             </div>
           </div>
-          <div className="rounded-xl bg-surface-container-low p-space-lg shadow-sm lg:p-space-xl">
+          <div className="rounded-xl bg-surface-container-low p-space-lg shadow-sm lg:p-space-xl border border-hairline">
             {acts.length === 0 ? (
               <EmptyState icon="history" title={activity.data ? 'No actions yet for this connector' : 'Loading…'} />
             ) : (
@@ -497,10 +497,10 @@ export default function Tracker() {
 
 function Kpi({ label, value, icon, tone, iconTone, iconBg = 'bg-surface-container', title }: { label: string; value: number; icon: string; tone: string; iconTone: string; iconBg?: string; title?: string }) {
   return (
-    <div className="flex items-center justify-between rounded-xl bg-surface-container-low p-space-md shadow-sm" title={title}>
+    <div className="flex items-center justify-between rounded-xl bg-surface-container-low p-space-md shadow-sm border border-hairline" title={title}>
       <div className="flex flex-col">
         <span className="font-caption text-caption uppercase tracking-wider text-on-surface-variant">{label}</span>
-        <span className={`mt-1 font-headline-md text-headline-md font-bold ${tone}`}>{String(value).padStart(2, '0')}</span>
+        <span className={`mt-1 font-mono text-headline-md font-medium ${tone}`}>{String(value).padStart(2, '0')}</span>
       </div>
       <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${iconBg} ${iconTone}`}>
         <Icon name={icon} className="text-headline-sm" />

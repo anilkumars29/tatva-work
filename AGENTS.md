@@ -62,9 +62,10 @@ The sections below (Start Here, Patterns, Anti-Patterns, etc.) remain the canoni
 
 Tatva Work web app (Milestone 4):
 
-- `components/tatva/` — Stitch screens: `Dashboard`, `MeetingsList`, `MeetingDetails`, `talk/TalkToTatva`, `KnowledgeBase`, `Tracker`, `Contacts`; shared `AppShell`, `ui` (toasts, confirm dialogs, `ComingSoon`), `activity` (activity_log → readable steps), `types`.
+- `components/tatva/` — Stitch screens: `Dashboard`, `MeetingsList`, `MeetingDetails`, `talk/TalkToTatva`, `KnowledgeBase`, `Tracker`, `Contacts`; shared `AppShell` (sidebar, profile menu, extension detection), `profile` (profile context, avatar, `ownerIsMe`), `brand` (inline SVG mark/wordmark from `brand-paths.ts`), `ui` (toasts, confirm dialogs, `ComingSoon`), `activity` (activity_log → readable steps), `types`.
 - `components/tatva/talk/VoiceBridge.tsx` — the live voice session. It follows every pattern below (isReady guard, `useJoin` owns leave, mic hook owns the track, mute via `setEnabled`, `AgoraVoiceAI.init` once on `isReady && joinSuccess`) and exposes `sendText` (RTM text → custom LLM → spoken reply), `speak`, and mute.
 - `lib/tatva.ts` + `hooks/use-api.ts` — all data goes through `/tatva/*`, rewritten in `next.config.mjs` to `server/` `/api/*`. Never call Supabase or Composio from the browser.
+- Look: Geist Sans / Geist Mono (`next/font`, tabular figures), tokens in `tailwind.config.ts` (neutral surfaces, `border-hairline`, `font-bold` = 600), yellow `#fef105` (the logo's) only for primary buttons, active states and key numbers.
 - Rules: every visible button must do something real; numbers shown must be computed from data; outward actions (email, Slack, calendar, sheets, issues) go through the confirm dialog (`runAction`) which shows the server's read-back from `/api/actions/preview`.
 - `LandingPage.tsx`, `ConversationComponent.tsx` and the `Quickstart*` components are the original quickstart UI. They are not routed any more; keep them only as reference.
 

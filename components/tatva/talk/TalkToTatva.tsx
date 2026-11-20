@@ -399,7 +399,7 @@ export default function TalkToTatva() {
   const elapsed = startedAt ? Math.floor((now - startedAt) / 1000) : 0;
   const connected = Object.entries(status.data?.composio ?? {})
     .filter(([, v]) => v)
-    .map(([k]) => ({ gmail: 'Gmail', slack: 'Slack', googlecalendar: 'Calendar', googlesheets: 'Sheets', googledocs: 'Docs' })[k] ?? k);
+    .map(([k]) => ({ gmail: 'Gmail', slack: 'Slack', googlecalendar: 'Calendar', googlesheets: 'Sheets', googledocs: 'Docs', googledrive: 'Drive' })[k] ?? k);
 
   return (
     <div className="flex w-full flex-col">
@@ -415,7 +415,7 @@ export default function TalkToTatva() {
               <h1 className="font-headline-lg text-headline-lg font-extrabold tracking-tight text-on-surface">Talk to Tatva</h1>
               {live && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-container-high px-2.5 py-0.5 font-label-sm text-label-sm uppercase tracking-wider text-tertiary-fixed">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-tertiary-fixed shadow-[0_0_8px_rgba(111,251,190,0.9)]" />
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-tertiary-fixed" />
                   In call · {String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')}
                 </span>
               )}
@@ -445,7 +445,7 @@ export default function TalkToTatva() {
               ))}
             </div>
 
-            <div className="relative flex flex-col items-center justify-center overflow-hidden rounded-2xl bg-surface-container-lowest p-space-xl text-center shadow-md">
+            <div className="relative flex flex-col items-center justify-center overflow-hidden rounded-2xl bg-surface-container-lowest p-space-xl text-center shadow-md border border-hairline">
               <div className="pointer-events-none absolute -top-24 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-primary-container/10 blur-[90px]" />
               <div className="relative z-10 mb-space-md flex h-44 w-44 items-center justify-center">
                 {(speaking || listening) && <div className="absolute inset-0 animate-[ping_3s_cubic-bezier(0,0,0.2,1)_infinite] rounded-full bg-primary-container/10" />}
@@ -456,7 +456,7 @@ export default function TalkToTatva() {
                   onClick={() => (live ? applyMute(!muted) : start())}
                   disabled={phase === 'starting' || phase === 'ending'}
                   aria-label={live ? (muted ? 'Unmute microphone' : 'Mute microphone') : 'Start conversation'}
-                  className={`relative flex h-28 w-28 items-center justify-center rounded-full shadow-[0_0_40px_rgba(255,212,0,0.45)] transition-transform hover:scale-105 ${live && muted ? 'bg-surface-container-high' : 'bg-primary-container'}`}
+                  className={`relative flex h-28 w-28 items-center justify-center rounded-full transition-transform hover:scale-105 ${live && muted ? 'bg-surface-container-high' : 'bg-primary-container'}`}
                 >
                   {phase === 'starting' ? (
                     <Spinner className="text-[44px] text-on-primary" />
@@ -478,7 +478,7 @@ export default function TalkToTatva() {
                   ))}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`h-2 w-2 rounded-full ${poojaHere ? 'animate-pulse bg-primary-container shadow-[0_0_8px_rgba(255,212,0,0.9)]' : 'bg-on-surface-variant/50'}`} />
+                  <span className={`h-2 w-2 rounded-full ${poojaHere ? 'animate-pulse bg-primary-container' : 'bg-on-surface-variant/50'}`} />
                   <span className="font-body-sm text-body-sm font-medium tracking-wide text-on-surface-variant">{statusLine}</span>
                 </div>
                 {voice?.issue && live && <span className="font-caption text-caption text-error">{voice.issue}</span>}
@@ -500,7 +500,7 @@ export default function TalkToTatva() {
                       type="button"
                       onClick={start}
                       disabled={phase === 'starting'}
-                      className="flex items-center gap-2.5 rounded-xl bg-primary-container px-6 py-3 text-on-primary shadow-[0_0_16px_rgba(255,212,0,0.3)] transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-60"
+                      className="flex items-center gap-2.5 rounded-xl bg-primary-container px-6 py-3 text-on-primary transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-60"
                     >
                       {phase === 'starting' ? <Spinner className="text-body-lg" /> : <Icon name="call" className="text-body-lg" />}
                       <span className="font-label-md text-label-md font-bold">{phase === 'starting' ? 'Connecting…' : 'Start conversation'}</span>
@@ -517,17 +517,17 @@ export default function TalkToTatva() {
                     <Icon name={muted ? 'mic_off' : 'mic'} className="text-headline-sm" />
                   </button>
                 </div>
-                <div className="flex items-center gap-1.5 rounded-lg bg-surface-container-low px-3 py-1.5 font-caption text-caption text-on-surface-variant">
+                <div className="flex items-center gap-1.5 rounded-lg bg-surface-container-low px-3 py-1.5 font-caption text-caption text-on-surface-variant border border-hairline">
                   <kbd className="rounded bg-surface-container-highest px-1.5 py-0.5 font-mono text-[10px] text-on-surface">SPACE</kbd>
                   <span>to push-to-talk while muted</span>
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-col gap-space-lg rounded-2xl bg-surface-container-low p-space-lg shadow-sm">
+            <div className="flex flex-col gap-space-lg rounded-2xl bg-surface-container-low p-space-lg shadow-sm border border-hairline">
               <div className="flex items-center justify-between pb-space-sm">
                 <div className="flex items-center gap-2.5">
-                  <Icon name="notes" className="text-body-lg text-primary-container" />
+                  <Icon name="notes" className="text-body-lg text-on-surface-variant" />
                   <h3 className="font-headline-sm text-headline-sm tracking-tight text-on-surface">Live Session Transcript</h3>
                 </div>
                 <div className="flex items-center gap-2">
@@ -554,7 +554,7 @@ export default function TalkToTatva() {
                   b.who === 'you' ? (
                     <div key={b.id} className="flex max-w-[85%] items-end justify-end gap-2 self-end">
                       <div className="flex flex-col items-end gap-1">
-                        <div className={`rounded-2xl rounded-br-[4px] bg-surface-container-lowest p-space-md text-on-surface shadow-sm ${b.live ? 'opacity-70' : ''}`}>
+                        <div className={`rounded-2xl rounded-br-[4px] bg-surface-container-lowest p-space-md text-on-surface shadow-sm ${b.live ? 'opacity-70' : ''} border border-hairline`}>
                           <p className="font-body-md text-body-md leading-relaxed">{b.text}</p>
                         </div>
                         <span className="mr-1 font-caption text-caption text-on-surface-variant">
@@ -597,7 +597,7 @@ export default function TalkToTatva() {
                 }}
               >
                 <div className="flex items-center pl-4 pr-2">
-                  <Icon name="graphic_eq" className="text-body-lg text-primary-container" />
+                  <Icon name="graphic_eq" className="text-body-lg text-on-surface-variant" />
                 </div>
                 <input
                   value={draft}
@@ -621,7 +621,7 @@ export default function TalkToTatva() {
           </section>
 
           <aside className="flex w-full flex-col gap-space-md xl:col-span-4">
-            <div className="flex flex-col gap-space-lg rounded-2xl bg-surface-container-low p-space-lg shadow-sm">
+            <div className="flex flex-col gap-space-lg rounded-2xl bg-surface-container-low p-space-lg shadow-sm border border-hairline">
               <div className="flex items-start justify-between">
                 <div className="flex flex-col gap-1">
                   <h3 className="font-headline-sm text-headline-sm font-bold text-on-surface">What Tatva is doing</h3>
@@ -631,7 +631,7 @@ export default function TalkToTatva() {
                 </div>
                 {live && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-container-high px-2.5 py-1 font-label-sm text-label-sm text-primary-fixed">
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-primary-container shadow-[0_0_8px_rgba(255,212,0,0.9)]" />
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-primary-container" />
                     Live Sync
                   </span>
                 )}
@@ -672,10 +672,10 @@ export default function TalkToTatva() {
                   <>
                     <div className="relative flex items-start gap-space-md">
                       <div className="absolute bottom-0 left-4 top-8 -mb-space-lg w-0.5 bg-surface-container-highest" />
-                      <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-container text-on-primary shadow-[0_0_12px_rgba(255,212,0,0.5)]">
+                      <div className="relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-container text-on-primary">
                         <Icon name="pending_actions" className="text-body-lg font-bold" />
                       </div>
-                      <div className="flex min-w-0 flex-1 flex-col gap-3 rounded-xl bg-surface-container p-space-md shadow-lg">
+                      <div className="flex min-w-0 flex-1 flex-col gap-3 rounded-xl bg-surface-container p-space-md shadow-lg border border-hairline">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex flex-col">
                             <span className="font-label-md text-label-md font-bold text-on-surface">{pending.status === 'failed' ? 'Failed, try again?' : 'Waiting for your approval'}</span>
@@ -683,7 +683,7 @@ export default function TalkToTatva() {
                           </div>
                           <span className="shrink-0 rounded bg-primary-container/20 px-2 py-0.5 font-label-sm text-label-sm uppercase tracking-wide text-primary-container">Action Required</span>
                         </div>
-                        <div className="flex flex-col gap-2 rounded-lg bg-surface-container-lowest p-3 shadow-inner">
+                        <div className="flex flex-col gap-2 rounded-lg bg-surface-container-lowest p-3 shadow-inner border border-hairline">
                           <PendingPreview p={pending} />
                         </div>
                         <div className="flex items-center gap-2 pt-1">
@@ -691,7 +691,7 @@ export default function TalkToTatva() {
                             type="button"
                             disabled={!!deciding}
                             onClick={() => decide('approve')}
-                            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary-container px-4 py-2.5 font-label-md text-label-md font-bold text-on-primary shadow-[0_0_16px_rgba(255,212,0,0.3)] transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-60"
+                            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary-container px-4 py-2.5 font-label-md text-label-md font-bold text-on-primary transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-60"
                           >
                             {deciding === 'approve' ? <Spinner className="text-body-md" /> : <Icon name="send" className="text-body-md font-bold" />}
                             <span>{pending.status === 'failed' ? 'Try again' : 'Approve & Send'}</span>
@@ -734,7 +734,7 @@ export default function TalkToTatva() {
               </div>
             </div>
 
-            <Link href="/knowledge" className="flex items-center justify-between rounded-2xl bg-surface-container-low p-space-md shadow-sm transition-colors hover:bg-surface-container">
+            <Link href="/knowledge" className="flex items-center justify-between rounded-2xl bg-surface-container-low p-space-md shadow-sm transition-colors hover:bg-surface-container border border-hairline">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container-high text-primary-container">
                   <Icon name="folder_open" className="text-headline-sm" />

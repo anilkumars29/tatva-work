@@ -12,15 +12,15 @@ import {
 import { ClientStartRequest, AgentResponse } from '@/types/conversation';
 import { DEFAULT_AGENT_UID } from '@/lib/agora';
 
-// Tatva Work voice agent. When CUSTOM_LLM_URL is set, Agora calls the Tatva
+// Tatva voice agent. When CUSTOM_LLM_URL is set, Agora calls the Tatva
 // server (server/, POST /v1/chat/completions, usually via a cloudflared tunnel)
 // as its LLM. That server owns the real system prompt, RAG over the meeting
 // knowledge base, Composio tools, and the confirm-before-acting step; this
 // prompt is only used by the managed-LLM fallback when CUSTOM_LLM_URL is unset.
-const POOJA_PROMPT = `You are Pooja, the voice assistant of Tatva Work, a meeting assistant. This is a voice call: reply in one or two short spoken sentences, no lists or markdown. The meeting knowledge base and actions are not connected right now, so if asked about meetings or to send, post or schedule anything, say that the Tatva server isn't connected yet.`;
+const POOJA_PROMPT = `You are Pooja, the voice assistant of Tatva, a meeting assistant. This is a voice call: reply in one or two short spoken sentences, no lists or markdown. The meeting knowledge base and actions are not connected right now, so if asked about meetings or to send, post or schedule anything, say that the Tatva server isn't connected yet.`;
 
 // First thing the agent says when a user joins the channel.
-const GREETING = `Hi, I'm Pooja from Tatva Work. Ask me about your meetings, or tell me what to send or schedule.`;
+const GREETING = `Hi, I'm Pooja from Tatva. Ask me about your meetings, or tell me what to send or schedule.`;
 
 // agentUid identifies the AI in the RTC channel and shares its default with the client.
 const agentUid = String(DEFAULT_AGENT_UID);

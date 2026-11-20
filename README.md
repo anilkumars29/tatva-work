@@ -1,4 +1,4 @@
-# Tatva Work (web app)
+# Tatva (web app)
 
 Voice-first meeting assistant. This Next.js app is the Tatva Work web app,
 built from the Stitch designs: **Dashboard**, **Meetings** (with a meeting page),

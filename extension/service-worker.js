@@ -1,4 +1,4 @@
-// Tatva Work Recorder — service worker.
+// Tatva Recorder — service worker.
 //
 // Coordinates recording. The popup gets a tab-capture stream ID and asks this
 // worker to start; the worker opens an offscreen document (the only extension
@@ -179,7 +179,7 @@ async function startRecording({ streamId, tabId, tabTitle, tabUrl, withMic }) {
 // user-initiated stops and when the recorder stops by itself (tab closed).
 async function finishRecording({ url, size, durationMs }) {
   const state = await getState();
-  const filename = `Tatva Work/meeting_${timestampForFilename(new Date())}.webm`;
+  const filename = `Tatva/meeting_${timestampForFilename(new Date())}.webm`;
   const downloadId = await chrome.downloads.download({ url, filename, saveAs: false });
 
   setBadge(false);

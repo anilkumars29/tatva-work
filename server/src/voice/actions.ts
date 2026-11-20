@@ -187,12 +187,12 @@ export async function prepareAction(kind: ActionKind, input: Record<string, unkn
       const note = str(input.body);
       if (!meeting && !note) throw new UserFacingError('What should the email say?');
       const subject =
-        str(input.subject) ?? (meeting ? `${joinWords(sections.map((s) => sectionWords[s])).replace(/^./, (c) => c.toUpperCase())}: ${meeting.title}` : 'Note from Tatva Work');
+        str(input.subject) ?? (meeting ? `${joinWords(sections.map((s) => sectionWords[s])).replace(/^./, (c) => c.toUpperCase())}: ${meeting.title}` : 'Note from Tatva');
       const greeting = `Hi ${to.contact ? to.name.split(' ')[0] : 'there'},`;
       const body = [greeting, note, meeting ? `From "${meeting.title}" (${meeting.date}):\n\n${renderMeeting(meeting, sections, '-')}` : null]
         .filter(Boolean)
         .join('\n\n')
-        .concat('\n\nSent by Tatva Work');
+        .concat('\n\nSent by Tatva');
       const who = to.contact ? to.name : to.email;
       const what = meeting ? `the ${joinWords(sections.map((s) => sectionWords[s]))} from ${meeting.title}` : `a note`;
       return {
@@ -210,7 +210,7 @@ export async function prepareAction(kind: ActionKind, input: Record<string, unkn
       const text = [
         note,
         meeting ? `*${meeting.title}* (${meeting.date})\n\n${renderMeeting(meeting, sections, '•')}` : null,
-        '_Posted by Tatva Work_',
+        '_Posted by Tatva_',
       ]
         .filter(Boolean)
         .join('\n\n');
@@ -381,7 +381,7 @@ export async function runAction(kind: ActionKind, a: Record<string, unknown>): P
         event_duration_hour: Math.floor(Number(a.duration_minutes) / 60),
         event_duration_minutes: Number(a.duration_minutes) % 60,
         attendees: attendees.map((p) => p.email),
-        description: [a.description, 'Scheduled by Tatva Work'].filter(Boolean).join('\n\n'),
+        description: [a.description, 'Scheduled by Tatva'].filter(Boolean).join('\n\n'),
         send_updates: attendees.length ? 'all' : 'none',
       });
       if (a.discuss_later_id) await supabase.from('discuss_later').update({ status: 'scheduled' }).eq('id', a.discuss_later_id);
@@ -444,7 +444,7 @@ export async function runAction(kind: ActionKind, a: Record<string, unknown>): P
       const mention = a.slack_handle ? `@${a.slack_handle}` : a.owner ? String(a.owner) : 'team';
       await executeTool('slack', 'SLACK_SEND_MESSAGE', {
         channel: config.slackChannel,
-        markdown_text: [`:rotating_light: *Issue escalated to ${mention}*`, `*${a.title}*`, a.context, a.due ? `Due: ${a.due}` : null, '_Logged by Tatva Work_']
+        markdown_text: [`:rotating_light: *Issue escalated to ${mention}*`, `*${a.title}*`, a.context, a.due ? `Due: ${a.due}` : null, '_Logged by Tatva_']
           .filter(Boolean)
           .join('\n'),
       });

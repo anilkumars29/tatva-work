@@ -5,6 +5,8 @@ const rootDir = dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Keep the dev badge clear of the sidebar's profile card.
+  devIndicators: { position: 'bottom-right' },
   output: 'standalone',
   images: {
     unoptimized: true,

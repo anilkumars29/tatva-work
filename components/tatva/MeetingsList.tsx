@@ -36,7 +36,7 @@ export default function MeetingsList() {
         </div>
       </div>
       {error && !data && <p className="font-body-md text-body-md text-error">{error}</p>}
-      <div className="divide-y divide-surface-container-highest overflow-hidden rounded-xl bg-surface-container-low shadow-md">
+      <div className="divide-y divide-surface-container-highest overflow-hidden rounded-xl bg-surface-container-low shadow-md border border-hairline">
         {!data ? (
           <div className="flex justify-center p-space-xl text-on-surface-variant">
             <Spinner />

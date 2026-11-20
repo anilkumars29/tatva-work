@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 import { useApi } from '@/hooks/use-api';
 import { api, durationLabel, dueLabel, initials, minutesLabel, plural, relativeDateTime, todayYmd } from '@/lib/tatva';
 import { PROCESSING, TOOL_LABELS, type CalendarEvent, type DashboardData, type MeetingRow, type PendingItem } from './types';
+import { firstName, ownerIsMe, useProfile } from './profile';
 import { EmptyState, Icon, Spinner, useTatvaUi } from './ui';
 
 const STEP_LABEL: Record<string, string> = {
@@ -31,7 +32,6 @@ function untilLabel(iso: string): string {
   return `In ${days} day${days === 1 ? '' : 's'}`;
 }
 
-export const isMine = (owner: string | null) => !!owner && /^anil\b/i.test(owner.trim());
 
 export function StatusPill({ meeting }: { meeting: MeetingRow }) {
   if (meeting.status === 'ready')
@@ -68,7 +68,7 @@ export function MeetingListRow({ meeting, onAsk }: { meeting: MeetingRow; onAsk:
     <div className="flex min-w-0 items-start gap-space-sm">
       <div
         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-          processing ? 'bg-primary-container/10 text-primary-container' : meeting.status === 'failed' ? 'bg-surface-container-high text-error' : 'bg-surface-container-high text-primary-container'
+          processing ? 'bg-primary-container/10 text-primary-container' : meeting.status === 'failed' ? 'bg-surface-container-high text-error' : 'bg-surface-container-high text-on-surface-variant'
         }`}
       >
         <Icon name={processing ? 'sync' : meeting.status === 'failed' ? 'warning_amber' : 'groups'} className={`text-headline-sm ${processing ? 'animate-spin' : ''}`} />
@@ -120,7 +120,7 @@ export function MeetingListRow({ meeting, onAsk }: { meeting: MeetingRow; onAsk:
             onClick={() => onAsk(meeting)}
             className="hidden items-center gap-1.5 rounded-lg bg-surface-container-high px-3 py-1 font-label-md text-caption text-on-surface opacity-0 transition-all hover:bg-surface-bright focus:opacity-100 group-hover:opacity-100 sm:inline-flex"
           >
-            <Icon name="graphic_eq" className="text-sm text-primary-container" />
+            <Icon name="graphic_eq" className="text-sm text-on-surface-variant" />
             <span>Ask Tatva</span>
           </button>
         )}
@@ -133,6 +133,7 @@ export function MeetingListRow({ meeting, onAsk }: { meeting: MeetingRow; onAsk:
 export default function Dashboard() {
   const router = useRouter();
   const { runAction, toast } = useTatvaUi();
+  const { profile } = useProfile();
   const { data, error, reload, setData } = useApi<DashboardData>('/dashboard', {
     refreshMs: (d) => (d?.meetings.some((m) => PROCESSING.includes(m.status)) ? 3000 : 30_000),
   });
@@ -187,7 +188,7 @@ export default function Dashboard() {
       <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-space-xl px-space-md py-space-md sm:px-space-xl">
         <header className="flex flex-col justify-between gap-space-lg md:flex-row md:items-end">
           <div className="flex flex-col gap-space-xs">
-            <h1 className="font-headline-xl text-headline-xl tracking-tight text-on-surface">{greeting()}, Anil</h1>
+            <h1 className="font-headline-xl text-headline-xl tracking-tight text-on-surface">{greeting()}{profile ? `, ${firstName(profile.name)}` : ''}</h1>
             <p className="font-body-md text-body-md text-secondary">Here&apos;s what your meetings produced this week</p>
           </div>
           <div className="flex items-center gap-space-sm self-start md:self-auto">
@@ -222,17 +223,17 @@ export default function Dashboard() {
               <span>Each one confirmed by you first</span>
             </div>
           </StatCard>
-          <div className="group relative flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-lowest p-5 shadow-xl">
+          <div className="group relative flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-lowest p-5 shadow-xl border border-hairline">
             <div className="pointer-events-none absolute -bottom-4 -right-4 h-28 w-28 rounded-full bg-primary-container/10 blur-2xl" />
             <div className="relative z-10 flex items-center justify-between">
               <span className="flex items-center gap-1.5 font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">
-                <span className="h-2 w-2 rounded-full bg-primary-container shadow-[0_0_8px_rgba(255,212,0,0.8)]" />
+                <span className="h-2 w-2 rounded-full bg-primary-container" />
                 Time Saved This Week
               </span>
-              <Icon name="timer" className="text-body-lg text-primary-container" />
+              <Icon name="timer" className="text-body-lg text-on-surface-variant" />
             </div>
             <div className="relative z-10 my-3">
-              <span className="font-headline-xl text-headline-xl font-extrabold tracking-tight text-primary-container">{s ? minutesLabel(s.time_saved_this_week_minutes) : '–'}</span>
+              <span className="font-mono text-headline-xl font-medium tracking-tight text-primary-container">{s ? minutesLabel(s.time_saved_this_week_minutes) : '–'}</span>
             </div>
             <p className="relative z-10 font-caption text-caption text-secondary">
               {s
@@ -254,7 +255,7 @@ export default function Dashboard() {
                 <Icon name="arrow_forward" className="text-body-sm" />
               </Link>
             </div>
-            <div className="divide-y divide-surface-container-highest overflow-hidden rounded-xl bg-surface-container-low shadow-md">
+            <div className="divide-y divide-surface-container-highest overflow-hidden rounded-xl bg-surface-container-low shadow-md border border-hairline">
               {!data ? (
                 <div className="flex items-center justify-center p-space-xl text-on-surface-variant">
                   <Spinner />
@@ -273,7 +274,7 @@ export default function Dashboard() {
                 <h2 className="font-headline-sm text-headline-sm font-bold text-on-surface">Up next</h2>
                 <span className="font-caption text-caption text-secondary">Google Calendar</span>
               </div>
-              <div className="relative flex flex-col gap-space-md overflow-hidden rounded-xl bg-surface-container-low p-5 shadow-md">
+              <div className="relative flex flex-col gap-space-md overflow-hidden rounded-xl bg-surface-container-low p-5 shadow-md border border-hairline">
                 {next.loading && !next.data ? (
                   <div className="flex items-center gap-2 text-on-surface-variant">
                     <Spinner className="text-body-md" /> <span className="font-body-sm text-body-sm">Checking your calendar…</span>
@@ -283,7 +284,7 @@ export default function Dashboard() {
                     <div className="flex items-center justify-between">
                       {event.created_by_tatva ? (
                         <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-container-lowest px-2 py-0.5 font-label-sm text-label-sm text-primary-container">
-                          <span className="h-1.5 w-1.5 rounded-full bg-primary-container shadow-[0_0_6px_rgba(255,212,0,0.8)]" />
+                          <span className="h-1.5 w-1.5 rounded-full bg-primary-container" />
                           Created by Tatva
                         </span>
                       ) : (
@@ -312,7 +313,7 @@ export default function Dashboard() {
                       onClick={() => router.push('/talk?brief=1')}
                       className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-surface-container-high px-4 py-2.5 font-label-md text-label-md text-on-surface shadow-sm transition-all hover:bg-surface-bright"
                     >
-                      <Icon name="auto_awesome" className="text-body-lg text-primary-container" />
+                      <Icon name="auto_awesome" className="text-body-lg text-on-surface-variant" />
                       <span>Brief me</span>
                     </button>
                   </>
@@ -334,10 +335,10 @@ export default function Dashboard() {
                 </div>
                 <span className="font-caption text-caption text-secondary">Auto-tracked</span>
               </div>
-              <div className="divide-y divide-surface-container-highest overflow-hidden rounded-xl bg-surface-container-low shadow-md">
+              <div className="divide-y divide-surface-container-highest overflow-hidden rounded-xl bg-surface-container-low shadow-md border border-hairline">
                 {data && data.pending.length === 0 && <EmptyState icon="task_alt" title="All caught up" body="No open action items." />}
                 {data?.pending.slice(0, 3).map((item) => {
-                  const mine = isMine(item.owner);
+                  const mine = ownerIsMe(item.owner, profile);
                   const due = item.due_date ? dueLabel(item.due_date) : item.due_text;
                   const overdue = item.due_date ? item.due_date < today : false;
                   return (
@@ -409,13 +410,13 @@ export default function Dashboard() {
 
 function StatCard({ label, icon, value, caption, children }: { label: string; icon: string; value: string; caption: string; children?: React.ReactNode }) {
   return (
-    <div className="flex flex-col justify-between rounded-xl bg-surface-container-low p-5 shadow-sm transition-colors hover:bg-surface-container">
+    <div className="flex flex-col justify-between rounded-xl bg-surface-container-low p-5 shadow-sm transition-colors hover:bg-surface-container border border-hairline">
       <div className="flex items-center justify-between">
         <span className="font-label-sm text-label-sm uppercase tracking-wider text-secondary">{label}</span>
         <Icon name={icon} className="text-body-lg text-secondary" />
       </div>
       <div className="my-3 flex items-baseline gap-2">
-        <span className="font-headline-lg text-headline-lg font-bold text-on-surface">{value}</span>
+        <span className="font-mono text-headline-lg font-medium text-on-surface">{value}</span>
       </div>
       <span className="font-caption text-caption text-secondary">{caption}</span>
       {children && <div className="mt-2">{children}</div>}

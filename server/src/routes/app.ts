@@ -9,6 +9,7 @@ import { localYmd, zoneOffset } from '../pipeline/dates.js';
 import { actionMinutes } from '../pipeline/timesaved.js';
 import { supabase } from '../supabase.js';
 import { ACTION_KINDS, executeNow, executePending, isActionKind, prepareAction, setTrackerStatus, trackerSheetUrl, UserFacingError, type PendingAction } from '../voice/actions.js';
+import { getProfile, saveProfile } from '../profile.js';
 import { logActivity } from '../voice/activity.js';
 import { allContacts, recentMeetings } from '../voice/data.js';
 import { nextCalendarEvent } from '../voice/tools.js';
@@ -141,12 +142,34 @@ appRouter.get(
 
 appRouter.get(
   '/status',
-  handle(async (_req, res) => {
-    const toolkits = ['gmail', 'slack', 'googlecalendar', 'googlesheets', 'googledocs'];
+  handle(async (req, res) => {
+    const toolkits = ['gmail', 'slack', 'googlecalendar', 'googlesheets', 'googledocs', 'googledrive'];
+    // ?fresh=1 (profile menu "Refresh") re-checks Composio instead of using the 5-minute cache.
+    if (req.query.fresh === '1') memo.delete('status');
     const status = await remembered('status', 5 * 60_000, async () =>
       Object.fromEntries(await Promise.all(toolkits.map(async (t) => [t, await isToolkitConnected(t).catch(() => false)]))),
     );
     res.json({ composio: status, user_id: config.composioUserId, slack_channel: config.slackChannel, tracker: config.trackerSheetName });
+  }),
+);
+
+// ------------------------------------------------------------------- profile
+
+appRouter.get(
+  '/profile',
+  handle(async (_req, res) => {
+    res.json({ profile: await getProfile() });
+  }),
+);
+
+appRouter.put(
+  '/profile',
+  handle(async (req, res) => {
+    try {
+      res.json({ profile: await saveProfile(req.body ?? {}) });
+    } catch (err) {
+      res.status(/^Could not save/.test(message(err)) ? 500 : 400).json({ error: message(err) });
+    }
   }),
 );
 

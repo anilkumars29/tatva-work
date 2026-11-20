@@ -64,7 +64,7 @@ async function failInterruptedMeetings() {
 }
 
 app.listen(config.port, () => {
-  console.log(`Tatva Work server on http://localhost:${config.port}`);
+  console.log(`Tatva server on http://localhost:${config.port}`);
   if (!config.voiceApiKey) console.warn('[startup] VOICE_LLM_API_KEY is not set: the voice endpoint /v1/chat/completions is disabled.');
   failInterruptedMeetings();
   warmUpEmbeddings()

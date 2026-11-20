@@ -159,7 +159,7 @@ export default function KnowledgeBase() {
             type="button"
             disabled={uploading}
             onClick={() => fileRef.current?.click()}
-            className="group flex items-center gap-space-sm rounded-[10px] bg-primary-container px-space-lg py-space-sm font-label-md text-label-md text-on-primary shadow-[0_0_20px_-3px_rgba(255,212,0,0.35)] transition-all duration-150 hover:shadow-[0_0_26px_rgba(255,212,0,0.5)] active:scale-[0.98] disabled:opacity-60"
+            className="group flex items-center gap-space-sm rounded-[10px] bg-primary-container px-space-lg py-space-sm font-label-md text-label-md text-on-primary transition-all duration-150 active:scale-[0.98] disabled:opacity-60"
           >
             {uploading ? <Spinner className="text-headline-sm" /> : <Icon name="upload_file" className="text-headline-sm transition-transform group-hover:-translate-y-0.5" />}
             <span>{uploading ? 'Uploading…' : 'Upload document'}</span>
@@ -169,7 +169,7 @@ export default function KnowledgeBase() {
 
       <div className="flex flex-col gap-space-md">
         <form
-          className="relative w-full rounded-xl bg-surface-container-low shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] transition-all duration-200 focus-within:shadow-[0_0_0_2px_#ffd400]"
+          className="relative w-full rounded-xl bg-surface-container-low shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] transition-all duration-200 border border-hairline"
           onSubmit={(e) => {
             e.preventDefault();
             void search(query);
@@ -206,7 +206,7 @@ export default function KnowledgeBase() {
           </div>
         </form>
         <div className="flex flex-wrap items-center justify-between gap-space-sm">
-          <div className="flex items-center gap-space-xs rounded-xl bg-surface-container-lowest p-1">
+          <div className="flex items-center gap-space-xs rounded-xl bg-surface-container-lowest p-1 border border-hairline">
             {tabs.map((t) => (
               <button
                 key={t.id}
@@ -243,10 +243,10 @@ export default function KnowledgeBase() {
         <div className="flex flex-col gap-space-sm">
           {shownResults.length === 0 && <EmptyState icon="search_off" title="Nothing relevant found" body="Try different words, or upload the document that has the answer." />}
           {shownResults.map((r, i) => (
-            <div key={`${r.id}-${i}`} className="group flex flex-col gap-space-sm rounded-xl bg-surface-container-low p-space-md shadow-[0_2px_12px_rgba(0,0,0,0.4)] transition-colors hover:bg-surface-container">
+            <div key={`${r.id}-${i}`} className="group flex flex-col gap-space-sm rounded-xl bg-surface-container-low p-space-md shadow-md transition-colors hover:bg-surface-container border border-hairline">
               <div className="flex items-center justify-between gap-space-sm">
                 <div className="flex min-w-0 items-center gap-space-xs">
-                  <Icon name={r.kind === 'document' ? 'description' : 'graphic_eq'} className="text-headline-sm text-primary-container" />
+                  <Icon name={r.kind === 'document' ? 'description' : 'graphic_eq'} className="text-headline-sm text-on-surface-variant" />
                   <span className="truncate font-label-md text-label-md text-on-surface">{r.title}</span>
                   <span className="shrink-0 rounded bg-surface-container-highest px-2 py-0.5 font-caption text-caption text-on-surface-variant">
                     {r.kind === 'document' ? `Page ${r.page ?? '?'}` : r.source_type.replace('_', ' ')}
@@ -277,11 +277,11 @@ export default function KnowledgeBase() {
         <div className="grid grid-cols-1 gap-space-lg md:grid-cols-2 lg:grid-cols-3">
           {tab !== 'documents' &&
             meetingList.map((m) => (
-              <div key={m.id} className="group relative flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-low shadow-[0_2px_12px_rgba(0,0,0,0.4)] transition-all duration-200 hover:bg-surface-container">
+              <div key={m.id} className="group relative flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-low shadow-md transition-all duration-200 hover:bg-surface-container border border-hairline">
                 <Link href={`/meetings/${m.id}`} className="flex flex-col">
                   <div className="flex items-center justify-between bg-surface-container-lowest px-space-md py-space-sm">
                     <div className="flex items-center gap-space-xs">
-                      <Icon name="graphic_eq" className="text-headline-sm text-primary-container" />
+                      <Icon name="graphic_eq" className="text-headline-sm text-on-surface-variant" />
                       <span className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface">Meeting Audio</span>
                     </div>
                     {m.duration_seconds != null && (
@@ -296,7 +296,7 @@ export default function KnowledgeBase() {
                         <span>{relativeDateTime(m.recorded_at)}</span>
                       </div>
                     </div>
-                    <div className="flex flex-col gap-1 rounded-lg bg-surface-container-lowest/60 p-space-sm">
+                    <div className="flex flex-col gap-1 rounded-lg bg-surface-container-lowest/60 p-space-sm border border-hairline">
                       <div className="flex items-center gap-1 font-caption text-caption uppercase tracking-wider text-primary-container">
                         <Icon name="auto_awesome" className="text-body-sm" />
                         <span>AI Summary</span>
@@ -326,7 +326,7 @@ export default function KnowledgeBase() {
             ))}
           {tab !== 'meetings' &&
             docList.map((d) => (
-              <div key={d.id} className="group relative flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-low shadow-[0_2px_12px_rgba(0,0,0,0.4)] transition-all duration-200 hover:bg-surface-container">
+              <div key={d.id} className="group relative flex flex-col justify-between overflow-hidden rounded-xl bg-surface-container-low shadow-md transition-all duration-200 hover:bg-surface-container border border-hairline">
                 <div className="flex flex-col">
                   <div className="flex items-center justify-between bg-surface-container-lowest px-space-md py-space-sm">
                     <div className="flex items-center gap-space-xs">
@@ -363,7 +363,7 @@ export default function KnowledgeBase() {
                         </span>
                       </div>
                     </div>
-                    <div className="flex flex-col gap-1 rounded-lg bg-surface-container-lowest/60 p-space-sm">
+                    <div className="flex flex-col gap-1 rounded-lg bg-surface-container-lowest/60 p-space-sm border border-hairline">
                       <div className="flex items-center gap-1 font-caption text-caption uppercase tracking-wider text-on-surface-variant">
                         <Icon name="article" className="text-body-sm" />
                         <span>Content Scope</span>
@@ -404,7 +404,7 @@ export default function KnowledgeBase() {
 
       <div className="flex items-center justify-center pb-space-2xl pt-space-lg">
         <div className="flex items-center gap-space-xs rounded-full bg-surface-container-low px-space-md py-space-sm font-body-sm text-body-sm text-on-surface-variant shadow-sm">
-          <Icon name="lightbulb" className="animate-pulse text-body-md text-primary-container" />
+          <Icon name="lightbulb" className="animate-pulse text-body-md text-on-surface-variant" />
           <span>Tip: record a meeting with the Tatva extension and it appears here automatically.</span>
         </div>
       </div>

@@ -15,14 +15,14 @@ export function buildMarkdown(
 ): string {
   let transcript = segments.map((s) => `**[${formatTimestamp(s.start)}]** ${s.text}`).join('\n\n');
   if (transcript.length > MAX_TRANSCRIPT_CHARS) {
-    transcript = `${transcript.slice(0, MAX_TRANSCRIPT_CHARS)}\n\n_(Transcript truncated; full text is stored in Tatva Work.)_`;
+    transcript = `${transcript.slice(0, MAX_TRANSCRIPT_CHARS)}\n\n_(Transcript truncated; full text is stored in Tatva.)_`;
   }
 
   return `# ${knowledge.title}
 
 **Date:** ${info.dateLabel}
 **Length:** ${Math.max(1, Math.round(info.durationMinutes))} min
-**Time saved by Tatva Work:** ~${info.timeSaved.minutes} min
+**Time saved by Tatva:** ~${info.timeSaved.minutes} min
 
 ## Summary
 

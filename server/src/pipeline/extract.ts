@@ -74,7 +74,7 @@ function upcomingCalendar(recordedAt: Date): string {
 }
 
 function systemPrompt(meta: MeetingMeta): string {
-  return `You turn workplace meeting transcripts into structured knowledge for "Tatva Work".
+  return `You turn workplace meeting transcripts into structured knowledge for "Tatva".
 Return ONLY JSON matching the schema. Use only facts stated in the transcript; never invent people, numbers or dates.
 
 Context:

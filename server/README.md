@@ -44,7 +44,8 @@ Web app endpoints (Milestone 4; the Next.js app calls them as `/tatva/*`; local 
 | ------ | ---- | ----- |
 | `GET` | `/api/dashboard` | stats (meetings, open items, Tatva actions and time saved this week), meetings, open items |
 | `GET` | `/api/calendar/next` | next Google Calendar event (cached 60 s) |
-| `GET` | `/api/status` | Composio connection per toolkit |
+| `GET` | `/api/status` | Composio connection per toolkit (Gmail, Slack, Calendar, Sheets, Docs, Drive); cached 5 min, `?fresh=1` re-checks |
+| `GET/PUT` | `/api/profile` | the user's profile (name, role, email, avatar colour) for the web app; stored as `profile.json` in a private `settings` Storage bucket (created on first save), defaults from `DEMO_OWNER_EMAIL` |
 | `GET` | `/api/meetings/:id/audio` | signed Storage URL for the recording (1 h) |
 | `POST` | `/api/meetings/:id/gdoc` | create the meeting's Google Doc if missing |
 | `POST` | `/api/actions/preview` | `{ kind, input }` → the read-back sentence (same as Pooja's) |

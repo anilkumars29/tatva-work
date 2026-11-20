@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useApi } from '@/hooks/use-api';
 import { api, downloadText, initials, plural, toCsv } from '@/lib/tatva';
 import type { Contact } from './types';
+import { ownerIsMe, useProfile, type Profile } from './profile';
 import { EmptyState, Icon, Spinner, useTatvaUi } from './ui';
 
 interface Draft {
@@ -15,10 +16,13 @@ interface Draft {
 }
 const EMPTY: Draft = { name: '', email: '', slack_handle: '', role: '' };
 
-const isSelf = (c: Contact) => /^anil\b/i.test(c.name);
+/** Your own contact entry: same email as your profile, else same first name. */
+const isSelf = (c: Contact, profile: Profile | null) =>
+  !!profile && (profile.email && c.email ? profile.email.toLowerCase() === c.email.toLowerCase() : ownerIsMe(c.name, profile));
 
 export default function Contacts() {
   const { toast } = useTatvaUi();
+  const { profile } = useProfile();
   const { data, error, reload } = useApi<{ contacts: Contact[] }>('/contacts');
   const status = useApi<{ composio: Record<string, boolean> }>('/status');
   const [query, setQuery] = useState('');
@@ -74,7 +78,7 @@ export default function Contacts() {
         <div className="flex flex-col justify-between gap-space-lg md:flex-row md:items-end">
           <div className="flex flex-col gap-space-xs">
             <div className="mb-1 flex items-center gap-space-sm">
-              <span className="h-1.5 w-1.5 rounded-full bg-primary-container shadow-[0_0_8px_rgba(255,212,0,0.8)]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-primary-container" />
               <span className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Directory &amp; Team Routing</span>
             </div>
             <h1 className="font-headline-lg text-headline-lg tracking-tight text-on-surface">Contacts</h1>
@@ -83,7 +87,7 @@ export default function Contacts() {
           <button
             type="button"
             onClick={() => open()}
-            className="group relative flex items-center gap-space-xs rounded-xl bg-primary-container px-space-lg py-space-sm font-label-md text-label-md font-bold tracking-tight text-on-primary shadow-[0_0_20px_-3px_rgba(255,212,0,0.35)] transition-all hover:shadow-[0_0_24px_rgba(255,212,0,0.5)] hover:brightness-105 active:scale-[0.98]"
+            className="group relative flex items-center gap-space-xs rounded-xl bg-primary-container px-space-lg py-space-sm font-label-md text-label-md font-bold tracking-tight text-on-primary transition-all hover:brightness-105 active:scale-[0.98]"
           >
             <Icon name="add" className="text-headline-sm transition-transform duration-200 group-hover:rotate-90" />
             <span>Add contact</span>
@@ -96,7 +100,7 @@ export default function Contacts() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="w-full rounded-xl bg-surface-container-low py-space-sm pl-11 pr-space-md font-body-md text-body-md text-on-surface outline-none transition-all placeholder:text-on-surface-variant/60 focus:bg-surface-container"
+              className="w-full rounded-xl bg-surface-container-low py-space-sm pl-11 pr-space-md font-body-md text-body-md text-on-surface outline-none transition-all placeholder:text-on-surface-variant/60 focus:bg-surface-container border border-hairline"
               placeholder="Search by name, role or email..."
               type="text"
             />
@@ -108,14 +112,14 @@ export default function Contacts() {
               aria-label="Export contacts as CSV"
               disabled={!data?.contacts.length}
               onClick={exportCsv}
-              className="rounded-xl bg-surface-container-low p-2 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface disabled:opacity-40"
+              className="rounded-xl bg-surface-container-low p-2 text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface disabled:opacity-40 border border-hairline"
             >
               <Icon name="file_download" className="text-headline-sm" />
             </button>
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-2xl bg-surface-container-lowest shadow-[0_16px_40px_rgba(0,0,0,0.6)]">
+        <div className="overflow-hidden rounded-2xl bg-surface-container-lowest shadow-xl border border-hairline">
           <div className="grid grid-cols-12 bg-surface-container-low px-space-lg py-space-md font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">
             <div className="col-span-4">Member / Identity</div>
             <div className="col-span-3 hidden sm:block">Email Address</div>
@@ -132,7 +136,7 @@ export default function Contacts() {
             {error && !data && <EmptyState icon="error" title="Couldn't load contacts" body={error} />}
             {data && contacts.length === 0 && <EmptyState icon="person_search" title={query ? 'No contacts match' : 'No contacts yet'} body={query ? undefined : 'Add your team so Pooja can email and invite them.'} />}
             {contacts.map((c, i) => {
-              const self = isSelf(c);
+              const self = isSelf(c, profile);
               return (
                 <div
                   key={c.id}
@@ -144,7 +148,7 @@ export default function Contacts() {
                     <div className="relative shrink-0">
                       <div
                         className={`flex h-10 w-10 items-center justify-center rounded-xl font-headline-sm text-headline-sm font-bold ${
-                          self ? 'bg-primary-container text-on-primary shadow-[0_0_12px_rgba(255,212,0,0.3)]' : 'bg-surface-container-highest text-primary shadow-inner'
+                          self ? 'bg-primary-container text-on-primary' : 'bg-surface-container-highest text-on-surface shadow-inner'
                         }`}
                       >
                         {initials(c.name)}
@@ -206,11 +210,11 @@ export default function Contacts() {
 
       {draft && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-space-md backdrop-blur-md" onMouseDown={(e) => e.target === e.currentTarget && setDraft(null)}>
-          <div role="dialog" aria-modal="true" aria-label={draft.id ? 'Edit contact' : 'Add contact'} className="relative flex w-full max-w-lg flex-col gap-space-lg rounded-2xl bg-surface-container-low p-space-xl shadow-[0_24px_64px_rgba(0,0,0,0.85),0_0_32px_rgba(255,212,0,0.08)]">
+          <div role="dialog" aria-modal="true" aria-label={draft.id ? 'Edit contact' : 'Add contact'} className="relative flex w-full max-w-lg flex-col gap-space-lg rounded-2xl bg-surface-container-low p-space-xl shadow-2xl border border-hairline">
             <div className="flex items-start justify-between gap-space-md">
               <div className="flex flex-col gap-space-xs">
                 <div className="flex items-center gap-space-xs">
-                  <span className="h-2 w-2 rounded-full bg-primary-container shadow-[0_0_8px_rgba(255,212,0,0.7)]" />
+                  <span className="h-2 w-2 rounded-full bg-primary-container" />
                   <span className="font-label-sm text-label-sm uppercase tracking-wider text-primary-container">Pooja Routing Sync</span>
                 </div>
                 <h2 className="font-headline-md text-headline-md tracking-tight text-on-surface">{draft.id ? 'Edit contact' : 'Add contact'}</h2>
@@ -231,8 +235,8 @@ export default function Contacts() {
               <ContactField id="contactEmail" label="Work Email" note="Automated invites" icon="alternate_email" placeholder="vikram@company.com" type="email" value={draft.email} onChange={(v) => setDraft({ ...draft, email: v })} required />
               <ContactField id="contactSlack" label="Slack Handle" note="Workspace ping tag" prefix="@" placeholder="vikram" value={draft.slack_handle} onChange={(v) => setDraft({ ...draft, slack_handle: v.replace(/^@/, '') })} mono />
               <ContactField id="contactRole" label="Organizational Role" note="Context tag" icon="hub" placeholder="e.g. Head of Growth / Operations" value={draft.role} onChange={(v) => setDraft({ ...draft, role: v })} />
-              <div className="mt-1 flex items-start gap-space-sm rounded-xl bg-surface-container-lowest p-space-sm">
-                <Icon name="smart_toy" className="mt-0.5 text-body-md text-primary-container" />
+              <div className="mt-1 flex items-start gap-space-sm rounded-xl bg-surface-container-lowest p-space-sm border border-hairline">
+                <Icon name="smart_toy" className="mt-0.5 text-body-md text-on-surface-variant" />
                 <p className="font-caption text-caption leading-relaxed text-on-surface-variant">
                   Say &ldquo;email {draft.name.split(' ')[0] || 'Vikram'}&rdquo; and Pooja uses this address. The first name works as a short form.
                 </p>
@@ -245,7 +249,7 @@ export default function Contacts() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="inline-flex items-center gap-2 rounded-xl bg-primary-container px-space-xl py-2.5 font-label-md text-label-md font-bold tracking-tight text-on-primary shadow-[0_0_16px_rgba(255,212,0,0.35)] transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-xl bg-primary-container px-space-xl py-2.5 font-label-md text-label-md font-bold tracking-tight text-on-primary transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-60"
                 >
                   {saving && <Spinner className="text-body-md" />}
                   Save contact
@@ -288,7 +292,7 @@ function ContactField(props: {
           value={props.value}
           onChange={(e) => props.onChange(e.target.value)}
           placeholder={props.placeholder}
-          className={`w-full rounded-xl bg-surface-container-lowest py-2.5 pr-space-md font-body-md text-body-md text-on-surface outline-none transition-all placeholder:text-on-surface-variant/50 focus:bg-surface-container ${props.prefix ? 'pl-9' : 'pl-11'} ${props.mono ? 'font-mono' : ''}`}
+          className={`w-full rounded-xl bg-surface-container-lowest py-2.5 pr-space-md font-body-md text-body-md text-on-surface outline-none transition-all placeholder:text-on-surface-variant/50 focus:bg-surface-container ${props.prefix ? 'pl-9' : 'pl-11'} ${props.mono ? 'font-mono' : ''} border border-hairline`}
         />
       </div>
     </div>

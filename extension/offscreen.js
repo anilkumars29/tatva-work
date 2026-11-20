@@ -1,4 +1,4 @@
-// Tatva Work Recorder — offscreen document.
+// Tatva Recorder — offscreen document.
 //
 // Captures the meeting tab's audio (from a tabCapture stream ID) and the
 // user's microphone, mixes them with Web Audio, and records the mix with
@@ -130,7 +130,7 @@ function stop() {
   });
 }
 
-// Uploads the last recording to the Tatva Work server. Reports the outcome
+// Uploads the last recording to the Tatva server. Reports the outcome
 // with an 'upload-finished' message (which also wakes the service worker if
 // Chrome suspended it during a long upload).
 async function upload({ serverUrl, tabTitle, tabUrl }) {

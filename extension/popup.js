@@ -1,4 +1,4 @@
-// Tatva Work Recorder — popup.
+// Tatva Recorder — popup.
 //
 // Shows Start/Stop and a running timer. All recording state lives in the
 // service worker (chrome.storage.session), so closing the popup does not stop
