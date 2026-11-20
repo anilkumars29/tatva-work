@@ -296,6 +296,16 @@ export async function resumeInterruptedMeetings(): Promise<void> {
     const short = meeting.id.slice(0, 8);
     const warnings: string[] = meeting.warnings ?? [];
     const resumes = warnings.filter((w) => w.startsWith(RESUMED)).length;
+    // Claim it atomically: only one instance's update matches a stale row
+    // (the update itself refreshes updated_at), so two servers never both resume it.
+    const claim = await supabase
+      .from('meetings')
+      .update({ warnings: [...warnings, `${RESUMED} (${new Date().toISOString()})`] })
+      .eq('id', meeting.id)
+      .in('status', [...PROCESSING_STATUSES])
+      .lt('updated_at', new Date(Date.now() - ABANDONED_AFTER_MS).toISOString())
+      .select('id, audio_path, audio_mime, warnings');
+    if (claim.error || !claim.data?.length) continue;
     try {
       if (!meeting.audio_path) {
         await setStatus(meeting.id, 'failed', { error: 'The server restarted before the recording was saved. Upload it again from the extension.' });
@@ -303,7 +313,7 @@ export async function resumeInterruptedMeetings(): Promise<void> {
         await setStatus(meeting.id, 'failed', { error: `Processing was interrupted ${resumes + 1} times by server restarts. Press Retry to try again.` });
       } else {
         console.warn(`[meetings] resuming interrupted meeting ${short} (attempt ${resumes + 2})`);
-        await requeueFromStorage(meeting, { warnings: [...warnings, `${RESUMED} (${new Date().toISOString()})`] });
+        await requeueFromStorage(claim.data[0]);
       }
     } catch (err) {
       await setStatus(meeting.id, 'failed', { error: `Could not resume after a restart: ${errorMessage(err)}. Press Retry.` }).catch(() => {});
