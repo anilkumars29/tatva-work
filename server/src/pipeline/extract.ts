@@ -113,7 +113,7 @@ function completionBudget(system: string, user: string): number {
   return Math.max(1024, Math.min(config.llmMaxCompletionTokens, fits));
 }
 
-async function callLlmOnce(system: string, user: string): Promise<Knowledge> {
+async function callLlmOnce(system: string, user: string, reasoningEffort = config.llmReasoningEffort): Promise<Knowledge> {
   const maxCompletionTokens = completionBudget(system, user);
   const response = (await groqPost('/chat/completions', () => ({
     json: true,
@@ -122,7 +122,7 @@ async function callLlmOnce(system: string, user: string): Promise<Knowledge> {
       temperature: 0,
       // gpt-oss spends part of the budget on reasoning; leave room for the JSON.
       max_completion_tokens: maxCompletionTokens,
-      reasoning_effort: config.llmReasoningEffort,
+      reasoning_effort: reasoningEffort,
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user },
@@ -139,16 +139,17 @@ async function callLlmOnce(system: string, user: string): Promise<Knowledge> {
   return knowledgeSchema.parse(JSON.parse(content));
 }
 
-// Structured output occasionally fails validation (e.g. truncated); one retry
-// usually succeeds.
+// Structured output occasionally fails validation, usually because reasoning
+// used up the output budget and the JSON was cut off (a meeting with many
+// action items). The retry reasons less, leaving the budget for the answer.
 async function callLlm(system: string, user: string): Promise<Knowledge> {
   try {
     return await callLlmOnce(system, user);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (!/json_validate_failed|max completion tokens|JSON|ZodError|invalid_type/i.test(message)) throw err;
-    console.warn(`[extract] invalid structured output, retrying once: ${message.slice(0, 160)}`);
-    return callLlmOnce(system, user);
+    console.warn(`[extract] invalid structured output, retrying once with low reasoning: ${message.slice(0, 160)}`);
+    return callLlmOnce(system, user, 'low');
   }
 }
 
