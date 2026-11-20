@@ -96,3 +96,7 @@ Re-audit security docs when any of these change:
 
 - [conversation_lifecycle.md](L2/conversation_lifecycle.md) — Token issuance and renewal sequence details.
 - [transcript_pipeline.md](L2/transcript_pipeline.md) — RTM event surfaces and error propagation boundaries.
+
+## Prompt injection (Tatva server)
+
+Meeting transcripts, attachments and documents are written by other people. Retrieved text and read-tool results are fenced in `<data>` tags (`server/src/voice/untrusted.ts`), cannot close the fence or fake a chat role, and instruction-like lines are labelled as quotes; `UNTRUSTED_RULE` is in the voice, extraction and vision prompts. Outward actions still need the user's own yes to a server-written read-back (`server/src/voice/actions.ts`). Tests: `server/test/untrusted.test.ts`. Full guardrail list: [docs/AGENT.md](../../AGENT.md#4-guardrails).

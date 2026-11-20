@@ -20,7 +20,9 @@ The sections below (Start Here, Patterns, Anti-Patterns, etc.) remain the canoni
 
 ## Start Here
 
-- Read [README.md](./README.md) for setup, commands, verification, and deployment.
+- Read [README.md](./README.md) for the product, setup, commands, verification, and deployment.
+- Read [docs/AGENT.md](docs/AGENT.md) for the agent loop, prompts, tools, guardrails and RAG (with file paths), and [docs/CODE_TOUR.md](docs/CODE_TOUR.md) for the 10 key files. The original Agora quickstart README is [docs/QUICKSTART.md](docs/QUICKSTART.md).
+- Retrieved meeting text, documents and tool results reach models as data: fence them with `server/src/voice/untrusted.ts` (`asData`, `toolResultAsData`, `UNTRUSTED_RULE`) and keep `server/test/untrusted.test.ts` passing.
 - Use [docs/ai/RECIPE.md](docs/ai/RECIPE.md) for the base quickstart recipe contract.
 - Use [docs/ai/L1/L2/from_scratch_bootstrap.md](docs/ai/L1/L2/from_scratch_bootstrap.md) for the baseline implementation map.
 - Use [docs/ai/L1/L2/transcript_pipeline.md](docs/ai/L1/L2/transcript_pipeline.md) for transcript and RTM behavior.

@@ -1,237 +1,208 @@
-# Tatva (web app)
+# Tatva: the voice-first meeting assistant that acts
 
-Voice-first meeting assistant. This Next.js app is the Tatva Work web app,
-built from the Stitch designs: **Dashboard**, **Meetings** (with a meeting page),
-**Talk to Tatva** (the Agora + Murf Falcon voice agent, Pooja), **Knowledge
-Base**, **Tracker** and **Contacts**. All data comes from the Tatva server in
-[`server/`](server/README.md), which the app reaches through a Next.js rewrite
-(`/tatva/*` → `http://localhost:4000/api/*`, override with `TATVA_SERVER_URL`).
-Product brief: [docs/PROJECT_BRIEF.md](docs/PROJECT_BRIEF.md).
+**Build with Agora hackathon · Track 2 (PS31): From Workplace Assistance to Intelligent Action**
 
-Run `server/` (`pnpm run dev`), the tunnel (`pnpm run tunnel` in `server/`, for
-the voice agent) and this app (`pnpm run dev`), then open http://localhost:3000.
-Load `extension/` unpacked in Chrome to record meetings; the sidebar shows
-"Extension connected" when it is installed.
+Tatva records your browser meetings, turns them into searchable knowledge, and
+gives you **Pooja**, a voice agent you can talk to. Ask her what was decided,
+what's still open, or to brief you for your next meeting. Then tell her to
+email the summary, post it to Slack, book the follow-up or update the tracker.
+She reads each action back and does it only after you say yes.
 
-The rest of this README is the original Agora quickstart reference, which the
-voice layer is still built on.
+**Live:** web app <https://tatva-work.vercel.app> (access code in the submission form) ·
+server <https://tatva-server-iu7c.onrender.com/health> ·
+code <https://github.com/anilkumars29/tatva-work>
 
-# Agora Conversational AI Next.js Quickstart
+![Dashboard](docs/screenshots/dashboard.jpg)
 
-[![Build](https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs/actions/workflows/build-check.yml/badge.svg)](https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs/actions/workflows/build-check.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](https://nodejs.org/)
+---
 
-Build a production-style voice agent in minutes with Next.js and the Agora Conversational AI Engine, including voice agent visualizer ([Agent UIKit](https://agoraio-conversational-ai.github.io/agent-uikit/)), live transcript, and real-time pipeline latency via `AGENT_METRICS` ([Agent Toolkit](https://github.com/AgoraIO-Conversational-AI/agent-client-toolkit-ts)).
+## The problem
 
-## Prerequisites
+Meetings produce decisions, owners and dates, and then they evaporate. Someone
+has to write the notes, chase the action items, email the summary, post the
+update and book the follow-up. That work is slow, often skipped, and the
+knowledge stays locked in a recording nobody re-watches. Assistants that only
+summarise stop at the easy part: the follow-through is still manual.
 
-- [Node.js 22+](https://nodejs.org/en/download/)
-- [pnpm](https://pnpm.io/installation)
-- [Agora CLI](https://github.com/AgoraIO-Community/cli)
+## The solution
 
-## Run It
+Tatva covers the whole loop, **before, during and after** a meeting:
 
-Getting started is quick and easy: install the CLI _(skip if you already have it)_ , scaffold the Next.js quickstart using the Agora CLI, install dependencies, and run.
+| Phase | What Tatva does |
+|-------|-----------------|
+| **Before** | "Brief me for my next meeting": Pooja reads your Google Calendar, pulls related past decisions and open items, and briefs you aloud. |
+| **During** | A Chrome extension records the meeting tab (Google Meet, Teams, YouTube…) plus your mic, while the tab keeps playing. |
+| **Action** | Ask by voice or click: email, Slack, Google Calendar, Google Sheets tracker, issue escalation, all through Composio, all confirmed first. |
+| **After** | Summary, decisions, action items with owners and due dates, numbers, key moments and "discuss later" topics; a Google Doc per meeting; a tracker; a **time saved** counter computed from the work automated. |
 
-1. **Install the Agora CLI and sign in**
-   _(skip if `agora` is already on your PATH)_:
+## Demo flow (the track's five steps)
 
-   macOS and Linux:
+| Step | What you see | How it works |
+|------|--------------|--------------|
+| **1. Initiate** | Open *Talk to Tatva*, press **Start conversation**, say "Brief me for my next meeting". | Agora Conversational AI joins the RTC channel; Deepgram `en-IN` transcribes; Murf Falcon speaks as Pooja (`en-IN`). |
+| **2. Understand** | Pooja answers from your meetings, slides and PDFs, citing the source: "From the slide Pricing.png shared in Q4 Vendor Review…". | Every turn retrieves from pgvector (local MiniLM embeddings) and gives Groq `gpt-oss-120b` tools to dig deeper. |
+| **3. Execute** | "Email Priya the action items from the vendor review." | The model calls `send_email`; the server resolves Priya's address and builds the exact email from the stored meeting. |
+| **4. Confirm** | Pooja: "I'll email Priya Sharma the action items from Q4 Vendor Review, with the subject … Should I send it?" You: "Yes." | The read-back is written by the server, not the model. Only a clear spoken yes (or a click) runs it, via Composio Gmail. Failures are spoken with a reason and an offer to retry. |
+| **5. Follow up** | "Done, the email is on its way to Priya. Want me to add the action items to the tracker too?" Then "Schedule the follow-up for Tuesday." | Tracker rows in the "Tatva Tracker" Google Sheet, a Calendar invite, the follow-up topic marked scheduled; everything shown live in "What Tatva is doing". |
 
-   ```bash
-   curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --add-to-path
-   ```
+The full loop, prompts, tools and guardrails are documented with file paths in
+[docs/AGENT.md](docs/AGENT.md).
 
-   Windows PowerShell:
+## How Agora and Murf are used
 
-   ```powershell
-   irm https://dl.agora.io/cli/install.ps1 | iex
-   ```
-
-   If the Windows install command fails in PowerShell, try running the macOS/Linux command from [Git Bash](https://git-scm.com/downloads/win), then open a new terminal and run `agora --help` to confirm the CLI is on your PATH.
-
-   Then verify and sign in:
-
-   ```bash
-   agora --help
-   agora login
-   ```
-
-   If `agora --help` is not found after install, close and reopen your terminal, then try again. If it still fails, check that the installer-added Agora CLI location is on your shell `PATH`.
-
-2. **Scaffold and run**
-   `agora init` clones the starter, binds an Agora project, and writes `.env.local`. (replace `my-nextjs-demo` with your own project name):
-
-   ```bash
-   agora init my-nextjs-demo --template nextjs
-   cd my-nextjs-demo
-   pnpm install
-   pnpm dev
-   ```
-
-3. Open [http://localhost:3000](http://localhost:3000) and click **Start conversation**.
-
-If the agent does not join or transcripts do not appear, run **`agora project doctor --deep`** to check credentials, feature enablement, network reachability, and local env binding.
-
-### Working from a clone of this repository
-
-Use this path if you already cloned **this** repo (for example to contribute or fork):
-
-```bash
-git clone https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs.git
-cd agent-quickstart-nextjs
-agora login
-agora project use <your-project>
-pnpm install
-agora project env write .env.local
-agora project doctor --deep
-pnpm dev
-```
-
-### Deploy to Vercel
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FAgoraIO-Conversational-AI%2Fagent-quickstart-nextjs&project-name=agent-quickstart-nextjs&repository-name=agent-quickstart-nextjs&env=NEXT_PUBLIC_AGORA_APP_ID,NEXT_AGORA_APP_CERTIFICATE&envDescription=Agora%20credentials%20needed%20to%20run%20the%20app&envLink=https%3A%2F%2Fgithub.com%2FAgoraIO-Conversational-AI%2Fagent-quickstart-nextjs%23run-it&demo-title=Agora%20Conversational%20AI%20Next.js%20Quickstart&demo-description=Official%20Next.js%20quickstart%20for%20building%20browser-based%20voice%20AI%20with%20Agora&demo-image=https%3A%2F%2Fraw.githubusercontent.com%2FAgoraIO-Conversational-AI%2Fagent-quickstart-nextjs%2Fmain%2F.github%2Fassets%2FConversation-Ai-Client.gif)
-
-To populate Vercel env vars from your bound Agora project:
-
-```bash
-agora project use <your-project>
-agora project env write .env.local
-rg "^(NEXT_PUBLIC_AGORA_APP_ID|NEXT_AGORA_APP_CERTIFICATE)=" .env.local
-```
-
-Copy those two values into Vercel Project Settings -> Environment Variables.
-
-### Environment variables
-
-Defined in [`env.local.example`](env.local.example).
-
-| Variable                     | Required | Notes                                                            |
-| ---------------------------- | :------: | ---------------------------------------------------------------- |
-| `NEXT_PUBLIC_AGORA_APP_ID`   |    ✅    | Agora Console → Project → App ID.                                |
-| `NEXT_AGORA_APP_CERTIFICATE` |    ✅    | Agora Console → Project → App Certificate. **Server-side only.** |
-| `MURF_API_KEY`               |    ✅    | Murf API key for Falcon TTS. **Server-side only.**               |
-| `MURF_VOICE_ID`              |    ✅    | Murf voice ID for an Indian English (`en-IN`) voice, e.g. Pooja. |
-| `MURF_VOICE_STYLE`           |    ✅    | Murf voice style for that voice, e.g. `Conversational`.         |
-| `CUSTOM_LLM_URL`             |    ➖    | Tatva server's `/v1/chat/completions` via the cloudflared tunnel (written by `pnpm run tunnel` in `server/`). Unset = managed `gpt-4o-mini` fallback with no tools. |
-| `CUSTOM_LLM_API_KEY`         |    ➖    | Bearer token Agora sends to the custom LLM; must equal `VOICE_LLM_API_KEY` in `server/.env`. **Server-side only.** |
-
-The agent configuration in [`app/api/invite-agent/route.ts`](app/api/invite-agent/route.ts) uses Agora-managed Deepgram STT (`nova-3`, `en-IN`), the Tatva custom LLM when `CUSTOM_LLM_URL` is set (otherwise Agora-managed OpenAI `gpt-4o-mini`), and Murf Falcon TTS with your own Murf key (BYOK): model `FALCON`, locale `en-IN`, 24 kHz, streamed from `wss://global.api.murf.ai/v1/speech/stream-input`. The route fails with a clear `Missing required environment variable` error if any `MURF_*` value is unset.
-
-For Tatva Work the LLM is the `server/` backend (RAG over meetings, Composio actions, confirm-before-acting). The route passes the channel name as the `X-Tatva-Session` header so each call keeps its own pending confirmation. See [server/README.md](server/README.md#voice-agent-milestone-3) for running web app + server + tunnel.
-
-## Commands
-
-```bash
-# Dev
-pnpm dev                # start the Next.js dev server
-
-# Quality
-pnpm run lint           # eslint
-pnpm run typecheck      # tsc --noEmit
-pnpm run doctor         # local prereqs + env binding
-
-# CI / pre-ship
-pnpm run verify:api     # API contract checks
-pnpm run build          # production build
-pnpm run verify         # doctor + lint + typecheck + verify:api + build
-```
-
-Run `pnpm run verify` before shipping changes — it covers local prerequisites, lint, type safety, the core API route contracts, and the production build.
+- **Agora Conversational AI Engine** runs the live voice agent: the web app
+  starts it with the `agora-agents` SDK (`app/api/invite-agent/route.ts`), joins
+  the RTC channel with `agora-rtc-react`, and gets transcripts, agent state and
+  latency metrics over **Agora RTM** (`agora-agent-client-toolkit`,
+  `agora-agent-uikit`). Agora's managed **Deepgram** STT (`nova-3`, `en-IN`)
+  hears the user; VAD turn detection handles interruptions.
+- **Custom LLM:** Agora calls Tatva's server (`POST /v1/chat/completions`,
+  OpenAI-compatible SSE) as its LLM, with the channel name as the session id.
+  That is where RAG, tool calling and the confirm step live.
+- **Typed input uses the same path:** suggestion chips and the text box send
+  the text over RTM to the agent, so Pooja answers aloud either way.
+- **Murf Falcon TTS** (bring-your-own-key) is Pooja's voice: model `FALCON`,
+  locale `en-IN`, 24 kHz, with a voice style (`MurfWithStyleTTS` adds the
+  `style` parameter the SDK doesn't expose). Replies are written for speech:
+  short sentences, Indian number units ("2 lakh"), no markdown or URLs.
 
 ## Architecture
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="./system-architecture-dark.svg">
-  <img src="./system-architecture.svg" alt="System architecture">
-</picture>
-
-The browser fetches a combined RTC + RTM token (`buildTokenWithRtm`) from this app, joins the channel using a single RTC client, and uses RTM as the data channel for transcript, agent state, metrics, and error events. The Conversational AI Engine joins the same channel as the shared agent UID in [`lib/agora.ts`](lib/agora.ts) and runs the STT → LLM → TTS pipeline in Agora Cloud.
-
-## What You Get
-
-- browser voice client built with Next.js App Router
-- RTC audio plus RTM transcript and state events
-- server routes for token generation, invite, and stop
-- [`AgentVisualizer`](https://agoraio-conversational-ai.github.io/agent-uikit/) for agent state and a built-in transcript panel for live turns
-- per-stage latency header driven by `AGENT_METRICS`
-- Agora-managed default STT and LLM, with Murf Falcon TTS (BYOK, Indian English)
-
-## How It Works
-
-1. The browser requests an RTC + RTM token from `/api/generate-agora-token`.
-2. The backend invites an Agora cloud agent with `/api/invite-agent`.
-3. The browser joins the channel and publishes mic audio.
-4. The client receives transcript, agent state, and `AGENT_METRICS` (per-stage latency) events over RTM.
-5. On end, the client calls `/api/stop-conversation`, logs out RTM, and unmounts the call view so Agora React hooks clean up RTC publish/join and the local microphone track.
-
-## Optional BYOK
-
-The `.env.local` contract contains Agora credentials plus the `MURF_*` TTS values above. If you are migrating from another supported provider, uncomment the matching snippet in [`app/api/invite-agent/route.ts`](app/api/invite-agent/route.ts) and add its variables to your local environment.
-
-```bash
-# Deepgram STT
-NEXT_DEEPGRAM_API_KEY=...
-
-# OpenAI-compatible LLM
-NEXT_LLM_URL=https://api.openai.com/v1/chat/completions
-NEXT_LLM_API_KEY=...
-
-# ElevenLabs TTS
-NEXT_ELEVENLABS_API_KEY=...
-NEXT_ELEVENLABS_VOICE_ID=...
+```
+ Chrome extension (MV3)            Web app (Next.js 16, Vercel)                 Agora cloud
+ tabCapture + mic ──upload──┐      Dashboard · Meetings · Talk · Knowledge ◄──RTC/RTM──► Conversational AI
+                            │      Tracker · Contacts · access-code login       Deepgram STT ─► LLM ─► Murf TTS
+                            ▼      /tatva/* proxy (adds server key)                         │
+              ┌───────────────────── Tatva server (Node + Express, Render) ◄────────────────┘
+              │  /api/*  meetings, search, actions, tracker      /v1/chat/completions (voice agent)
+              │  pipeline: Whisper ► extraction ► chunks ► embeddings ► Google Doc
+              │  voice: retrieval ► Groq tool calling ► pending action ► confirm ► Composio
+              ▼
+   Supabase (Postgres + pgvector + Storage)    Groq (Whisper, gpt-oss, vision)    Composio (Gmail, Calendar,
+   meetings, action items, chunks, audio       transcription + reasoning          Slack, Sheets, Docs)
 ```
 
-## Repo Map
+| Folder | What it is |
+|--------|------------|
+| `/` | Next.js 16 web app (`components/tatva/`, `app/`), access-code login (`proxy.ts`) |
+| `extension/` | Chrome MV3 recorder: tab audio + mic, offscreen document, upload, status in the popup |
+| `server/` | Node + TypeScript backend: processing pipeline, RAG, voice agent, actions |
+| `server/supabase/migrations/` | Database schema, pgvector index and search function |
 
-Tatva Work app:
+## Features
 
-- `app/page.tsx`, `app/meetings/`, `app/talk/`, `app/knowledge/`, `app/tracker/`, `app/contacts/` — routes
-- `components/tatva/AppShell.tsx` — sidebar shell, extension detection, toasts and confirm dialogs (`ui.tsx`)
-- `components/tatva/talk/VoiceBridge.tsx` — headless RTC/RTM/AgoraVoiceAI session (same hook rules as below)
-- `components/tatva/talk/TalkToTatva.tsx` — voice screen: transcript, sendText chips/text box, live timeline, approvals
-- `lib/tatva.ts` — `/tatva` API client and formatters; `hooks/use-api.ts` — polling fetch hook
+- **Recording:** one-click record of any meeting tab plus your microphone, with local backup; server presets (Cloud / Local / Custom).
+- **Meeting knowledge:** Groq Whisper transcription (chunked for long files), strict-JSON extraction of title, summary, decisions, action items with owners and due dates, numbers, key moments and follow-ups; dates checked deterministically.
+- **Meeting page:** audio with waveform and key-moment pins, searchable transcript that seeks the audio, Google Doc, email / Slack / calendar buttons, attachments.
+- **Attachments:** drop, paste (Ctrl+V) or upload slides, screenshots and PDFs; a vision model reads text and charts; Pooja cites them by name.
+- **Knowledge Base:** semantic search across meetings, attachments and company PDFs.
+- **Talk to Tatva:** live voice agent with transcript, suggestion chips, a text box, and a "What Tatva is doing" timeline with Approve / Cancel.
+- **Tracker:** KPIs, filters, sort, search, CSV export, status sync to the Google Sheet, issues with Slack escalation, full activity log.
+- **Time saved:** per meeting and per week, computed from the work Tatva did (notes, items, emails, invites, posts), not guessed by an LLM.
+- **Resilience:** restarts resume interrupted meetings automatically; Retry on failures; memory kept low for the 512 MB server.
 
-Quickstart (the voice layer this app grew from; the old `LandingPage` /
-`ConversationComponent` screens are no longer routed and are kept as reference):
+| | |
+|---|---|
+| ![Meeting page](docs/screenshots/meeting.jpg) | ![Talk to Tatva](docs/screenshots/talk.jpg) |
+| ![Knowledge Base](docs/screenshots/knowledge.jpg) | ![Tracker](docs/screenshots/tracker.jpg) |
 
-- `app/api/generate-agora-token/route.ts` — issues RTC + RTM tokens
-- `app/api/invite-agent/route.ts` — starts the agent session and configures the pipeline
-- `app/api/stop-conversation/route.ts` — stops the agent session
-- `components/LandingPage.tsx` — entry point: token fetch, RTM login, conversation lifecycle
-- `components/ConversationComponent.tsx` — RTC client, transcript state, `AGENT_METRICS`, mic release
-- `components/QuickstartConversationLayout.tsx` — in-call header, transcript rail, controls dock
-- `components/QuickstartPipelineMetrics.tsx` — per-stage latency chips in the header
-- `components/QuickstartTranscriptPanel.tsx` — live transcript rail
-- `components/QuickstartPreCallCard.tsx` — pre-call hero card
-- `lib/chat-completions.ts` — server-side custom LLM SSE handler used by the chat completions route
-- `lib/conversation.ts` — transcript normalization and visualizer state mapping
-- `AGENTS.md` — primary agent-facing guide
+## Guardrails at a glance
 
-## Troubleshooting
+- Actions are **proposed, read back by the server, and run only on a clear yes** (or a click). One pending action per call, expiring after 10 minutes.
+- **Retrieved meeting text and documents are data, never instructions** (fenced, neutralised, labelled; tested in `server/test/untrusted.test.ts`).
+- Strict JSON schemas, deterministic date checks, server-made citations.
+- Access-code login, a server key between Vercel and the server, a Bearer key for the voice endpoint, RLS on every table.
+- Retries with backoff for Groq and Composio, a fallback model, spoken error messages.
 
-- **Agent does not join or transcripts are missing:** run `agora project doctor --deep`.
-- **`pnpm run doctor` fails:** if an Agora value is missing, run `agora project env write .env.local`; if a `MURF_*` value is missing, add it to `.env.local` by hand (that command writes only Agora credentials). Then retry.
-- **Manual clone / env values:** `agora project use <your-project>` then `agora project env write .env.local`.
-- **RTM login fails:** keep [`app/api/generate-agora-token/route.ts`](app/api/generate-agora-token/route.ts) on `RtcTokenBuilder.buildTokenWithRtm` — RTC-only tokens will not satisfy `rtm.login`.
-- **Transcript speakers inverted:** check the `uid === "0"` remap in [`components/ConversationComponent.tsx`](components/ConversationComponent.tsx).
-- **Agent never appears in channel:** ensure the shared agent UID in [`lib/agora.ts`](lib/agora.ts) is used by both the client and invite route.
+Details and known gaps: [docs/AGENT.md](docs/AGENT.md).
 
-## More Docs
+## Tech stack
 
-- [docs/ai/L0_repo_card.md](./docs/ai/L0_repo_card.md)
-- [docs/ai/RECIPE.md](./docs/ai/RECIPE.md)
-- [AGENTS.md](./AGENTS.md)
+| Concern | Choice |
+|---------|--------|
+| Voice | Agora Conversational AI Engine (`agora-agents`, `agora-rtc-react`, `agora-rtm`, `agora-agent-client-toolkit`, `agora-agent-uikit`), Deepgram `nova-3` `en-IN`, **Murf Falcon** TTS `en-IN` |
+| LLM | Groq `openai/gpt-oss-120b` (voice tool calling and extraction), `gpt-oss-20b` fallback, `qwen/qwen3.8-27b` vision |
+| Speech-to-text (recordings) | Groq `whisper-large-v3-turbo` |
+| Embeddings | Local transformers.js `Xenova/all-MiniLM-L6-v2` (384 dims) |
+| Data | Supabase Postgres + pgvector (HNSW, cosine) + Storage |
+| Actions | Composio: Gmail, Google Calendar, Slack, Google Sheets, Google Docs |
+| Web | Next.js 16, React 19, TypeScript, Tailwind; Vercel (`sin1`) |
+| Server | Node 24, Express 5, TypeScript; Render (Singapore) |
+| Extension | Chrome Manifest V3 (`tabCapture`, offscreen document) |
+| Tests | Node test runner (server units), Playwright (live site, extension popup) |
 
-## Contributing
+## Setup
 
-Pull requests welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and conventions.
+### Local
 
-## Security
+Prerequisites: Node 22+, pnpm, Chrome, accounts for Agora, Murf, Groq, Supabase and Composio.
 
-Please do **not** open public issues for security reports. Email security@agora.io with details and reproduction steps.
+```bash
+# 1. Database: run server/supabase/migrations/001…004 in the Supabase SQL editor.
 
-## License
+# 2. Server (http://localhost:4000)
+cd server
+cp env.example .env          # SUPABASE_URL, SUPABASE_SECRET_KEY, GROQ_API_KEY, COMPOSIO_API_KEY, VOICE_LLM_API_KEY
+pnpm install
+pnpm run check:env           # checks env, schema, Groq models, Composio toolkits, ffmpeg
+pnpm run seed:contacts
+pnpm run dev
 
-Released under the [MIT License](./LICENSE).
+# 3. Tunnel so Agora's cloud can reach the local server (keep it running)
+pnpm run tunnel              # writes CUSTOM_LLM_URL into ../.env.local
+
+# 4. Web app (http://localhost:3000), from the repo root
+cp env.local.example .env.local   # Agora App ID + certificate, MURF_API_KEY, MURF_VOICE_ID, MURF_VOICE_STYLE, CUSTOM_LLM_API_KEY
+pnpm install
+pnpm run dev
+
+# 5. Extension: chrome://extensions → Developer mode → Load unpacked → extension/
+```
+
+Connect Gmail, Google Calendar, Slack, Google Sheets and Google Docs once in
+Composio (`pnpm run check:env` lists what's missing). More: [server/README.md](server/README.md),
+[extension/README.md](extension/README.md).
+
+### Deployed
+
+- **Server on Render** from `render.yaml` (free plan kept awake by an UptimeRobot `/health` monitor).
+- **Web app on Vercel**, which proxies `/tatva/*` to the server and adds the server key.
+- `node scripts/deploy-env.mjs` prepares both sets of variables.
+
+Full steps: [docs/DEPLOY.md](docs/DEPLOY.md).
+
+### Checks
+
+```bash
+pnpm run verify                 # env doctor, lint, typecheck, API contracts, extension check, build
+cd server && pnpm test          # unit tests: dates, confirmations, citations, injection defence, auth
+pnpm test:extension             # opens the real toolbar popup
+TATVA_URL=https://tatva-work.vercel.app pnpm test:live   # every page and button + one voice call
+```
+
+## Limitations
+
+- **Single tenant:** one access code and one Composio account; no per-user data separation or roles.
+- **No speaker diarization:** owners come from names said with a task ("Priya, can you…").
+- **Free tiers:** Groq's per-minute token limits can slow extraction of long meetings (a 20-minute meeting takes about 4 minutes); the Render free instance has 512 MB and 0.1 CPU.
+- **Browser meetings only:** the extension records Chrome tabs, not desktop apps.
+- **Guardrail gaps** (listed in [docs/AGENT.md](docs/AGENT.md#6-what-is-missing)): no rate limiting on the server API, no recipient allowlist, no PII redaction, and citations are prompted rather than verified.
+
+## Roadmap
+
+- Speaker diarization and per-speaker owners.
+- Live transcription and in-meeting nudges while recording (Murf STT).
+- Multi-user workspaces with per-user Composio connections and roles.
+- Jira / Asana export and editable drafts before sending.
+- Recipient allowlists, rate limiting and an answer-quality evaluation set for RAG.
+- Desktop meeting capture (Zoom, Teams apps).
+
+## More docs
+
+- [docs/AGENT.md](docs/AGENT.md): agent loop, prompts, tools, guardrails, RAG.
+- [docs/CODE_TOUR.md](docs/CODE_TOUR.md): the 10 files to open first.
+- [docs/PROJECT_BRIEF.md](docs/PROJECT_BRIEF.md): scope and milestones.
+- [docs/DEPLOY.md](docs/DEPLOY.md): deployment, memory, resilience.
+- [docs/QUICKSTART.md](docs/QUICKSTART.md): the original Agora quickstart reference this app is built on.
+
+License: MIT (see [LICENSE](LICENSE)).
