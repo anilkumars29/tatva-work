@@ -7,7 +7,8 @@ import { logActivity } from './activity.js';
 import { getProfile } from '../profile.js';
 import { allContacts, dateTimeLabel, dayLabel, recentMeetings, searchKnowledge } from './data.js';
 import { confirmationIntent, dropRepeat, speakable } from './speech.js';
-import { runReadTool, TOOLS } from './tools.js';
+import { runReadTool, toolsFor } from './tools.js';
+import { ALL, OutOfScopeError, outOfScopeMessage, type Scope } from './scope.js';
 import { asData, toolResultAsData, UNTRUSTED_RULE } from './untrusted.js';
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
@@ -51,12 +52,13 @@ function nextMonday(): string {
   return localYmd(new Date(now.getTime() + ahead * 86_400_000));
 }
 
-async function systemPrompt(sessionId: string, userText: string, pending: PendingAction | null): Promise<string> {
+async function systemPrompt(sessionId: string, userText: string, pending: PendingAction | null, scope: Scope): Promise<string> {
+  const focused = scope.kind === 'meeting' ? scope : null;
   const wordCount = userText.split(/\s+/).filter(Boolean).length;
   const [meetings, contacts, hits, profile] = await Promise.all([
     recentMeetings().catch(() => []),
     allContacts().catch(() => []),
-    wordCount >= 3 ? searchKnowledge(userText, { count: 4, threshold: 0.3 }).catch(() => []) : Promise.resolve([]),
+    wordCount >= 3 ? searchKnowledge(userText, { count: 4, threshold: 0.3, meetingId: focused?.meetingId }).catch(() => []) : Promise.resolve([]),
     getProfile().catch(() => null),
   ]);
   const now = new Date();
@@ -67,13 +69,15 @@ async function systemPrompt(sessionId: string, userText: string, pending: Pendin
     ``,
     `What you know: answer from the knowledge base (recorded meetings, files shared in meetings, and uploaded company documents) and tools, never invent meetings, people, decisions or numbers. If the context below does not answer the question, call a tool (get_meeting_details, search_knowledge, get_open_items). If it is still unknown, say you don't have that in your notes.`,
     `Sources: if your answer uses a match whose source is "attachment" (a slide, screenshot or PDF shared in a meeting), you must begin the answer with its citation, for example: "From the slide Pricing.png shared in Q4 Vendor Review, the new rate is 40,000 rupees a month." Use the exact file name and meeting from the match label.`,
-    `"Brief me" or "prepare me for my next meeting" means call brief_me, then give the gist in a few sentences. "What's pending" or "what's still open" without a named meeting means get_open_items with no arguments.`,
+    `"Brief me", "what's next", "our next meeting", "what are we discussing next" or "the meeting we scheduled" means call brief_me: it merges calendar events and planned follow-ups by date. Answer with the earliest item (what, when, who). If brief_me gives say_about_next, the item is planned but not on the calendar yet: say that and offer to add it. Only summarise a meeting when the user asks for a summary. "What's pending" or "what's still open" without a named meeting means get_open_items with no arguments.`,
     ``,
     `Actions: to email, post to Slack, create a calendar event, add to the tracker or log an issue (a bug, blocker or escalation: use log_issue), call that tool directly with your best arguments. Prefer passing the meeting so its content is included automatically. Only add calendar attendees the user explicitly names. Write no text in the same message as an action tool call. Do not ask for confirmation yourself and never say an action is done: the system reads the action back to the user and runs it only after they say yes. If a tool returns an error, briefly say what's missing and ask for it.`,
     UNTRUSTED_RULE,
     `Dates: now is ${dateTimeLabel(now.toISOString())} (${localYmd(now)}), time zone ${config.timeZone}. "Next week" with no day means Monday ${nextMonday()} at 11:00. A day with no time means 11:00. Meetings default to 30 minutes.`,
     ``,
-    `Recent meetings, newest first: ${meetings.slice(0, 6).map((m) => `${m.title} (${dayLabel(m.recorded_at ?? m.created_at)})`).join('; ') || 'none yet'}.`,
+    focused
+      ? `Scope: this call is focused on ONE meeting, "${focused.title}" (${focused.date}). Use only this meeting: its transcript, decisions, action items, numbers, attachments and follow-ups; every tool and action is limited to it. If the user asks about any other meeting, about all meetings, or about company documents, do not call a tool; say exactly: "${outOfScopeMessage(focused)}"`
+      : `Recent meetings, newest first: ${meetings.slice(0, 6).map((m) => `${m.title} (${dayLabel(m.recorded_at ?? m.created_at)})`).join('; ') || 'none yet'}.`,
     `Contacts: ${contacts.map((c) => c.name).join(', ') || 'none'}.`,
     profile ? `The user is ${profile.name}${profile.role ? `, ${profile.role}` : ''}. "Me" or "myself" means the user: pass "me" as the recipient and the system uses their profile email.` : ``,
   ];
@@ -110,7 +114,7 @@ const MODELS = [config.voiceModel, ...(process.env.VOICE_LLM_FALLBACK_MODELS ?? 
  * One Groq completion (streamed, assembled here). Tries each model in turn on
  * rate limits; if all are limited, returns how long to wait instead.
  */
-async function groqRound(messages: ChatMessage[], signal: AbortSignal): Promise<ChatMessage | { retryAfterMs: number }> {
+async function groqRound(messages: ChatMessage[], signal: AbortSignal, tools: unknown[]): Promise<ChatMessage | { retryAfterMs: number }> {
   let response: Response | null = null;
   let lastError = '';
   let retryAfterMs = Infinity;
@@ -122,7 +126,7 @@ async function groqRound(messages: ChatMessage[], signal: AbortSignal): Promise<
       body: JSON.stringify({
         model,
         messages,
-        tools: TOOLS,
+        tools,
         tool_choice: 'auto',
         stream: true,
         temperature: 0.3,
@@ -177,7 +181,12 @@ async function groqRound(messages: ChatMessage[], signal: AbortSignal): Promise<
 
 // --------------------------------------------------------------- the turn
 
-export async function* voiceTurn(sessionId: string, incoming: Array<{ role: string; content: unknown }>, signal: AbortSignal): AsyncGenerator<string> {
+export async function* voiceTurn(
+  sessionId: string,
+  incoming: Array<{ role: string; content: unknown }>,
+  signal: AbortSignal,
+  scope: Scope = ALL,
+): AsyncGenerator<string> {
   const history: ChatMessage[] = incoming
     .filter((m) => m.role === 'user' || m.role === 'assistant')
     .map((m) => ({ role: m.role as 'user' | 'assistant', content: textOf(m.content).slice(0, 800) }))
@@ -206,13 +215,14 @@ export async function* voiceTurn(sessionId: string, incoming: Array<{ role: stri
     }
   }
 
-  const messages: ChatMessage[] = [{ role: 'system', content: await systemPrompt(sessionId, userText, pending) }, ...history];
+  const messages: ChatMessage[] = [{ role: 'system', content: await systemPrompt(sessionId, userText, pending, scope) }, ...history];
+  const tools = toolsFor(scope);
   let waited = false;
   let regenerated = false;
   for (let round = 0; round < MAX_ROUNDS; round++) {
     let reply: Awaited<ReturnType<typeof groqRound>>;
     try {
-      reply = await groqRound(messages, signal);
+      reply = await groqRound(messages, signal, tools);
     } catch (err) {
       // Groq rejects tool calls that break the schema (e.g. a null argument); one retry usually fixes it.
       if (regenerated || !/tool_use_failed/.test(String(err))) throw err;
@@ -250,13 +260,13 @@ export async function* voiceTurn(sessionId: string, incoming: Array<{ role: stri
       console.log(`[voice] tool ${name} ${JSON.stringify(args)}`);
       if (isActionKind(name)) {
         try {
-          const created = await proposeAction(sessionId, name, args);
+          const created = await proposeAction(sessionId, name, args, scope);
           proposal = created.summary;
           messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ status: 'awaiting confirmation' }) });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           void logActivity({ sessionId, tool: name, args, status: 'error', error: message });
-          const userFacing = err instanceof UserFacingError;
+          const userFacing = err instanceof UserFacingError || err instanceof OutOfScopeError;
           messages.push({
             role: 'tool',
             tool_call_id: call.id,
@@ -264,7 +274,7 @@ export async function* voiceTurn(sessionId: string, incoming: Array<{ role: stri
           });
         }
       } else {
-        const result = await runReadTool(sessionId, name, args);
+        const result = await runReadTool(sessionId, name, args, scope);
         if (name === 'get_meeting_details' && !(result as { error?: string }).error) {
           const r = result as { title: string; date: string };
           remember(sessionId, `discussed meeting "${r.title}" (${r.date})`);

@@ -287,6 +287,14 @@ export default function MeetingDetails({ id }: { id: string }) {
           </div>
           {ready && (
             <div className="flex flex-wrap items-center gap-space-sm self-start md:self-center">
+              {/* Flagship: talk to Pooja about this meeting only (meeting mode). */}
+              <Link
+                href={`/talk?meeting=${m.id}`}
+                className="inline-flex items-center gap-space-xs rounded-lg bg-primary-container px-space-md py-space-sm font-label-md text-label-md text-on-primary-fixed shadow-sm transition-all hover:bg-primary-fixed active:scale-[0.98]"
+              >
+                <Icon name="graphic_eq" className="text-body-lg" />
+                <span className="font-bold">Ask Tatva about this meeting</span>
+              </Link>
               <button type="button" onClick={openDoc} className="inline-flex items-center gap-space-xs rounded-lg border border-hairline bg-surface-container px-space-md py-space-sm font-label-md text-label-md text-on-surface shadow-sm transition-all hover:border-hairline-strong hover:bg-surface-container-high">
                 <Icon name="description" className="text-body-lg text-on-surface-variant" />
                 <span>{m.gdoc_url ? 'Open Google Doc' : 'Create Google Doc'}</span>
@@ -295,13 +303,9 @@ export default function MeetingDetails({ id }: { id: string }) {
                 <Icon name="mail" className="text-body-lg text-on-surface-variant" />
                 <span>Send by email</span>
               </button>
-              <button
-                type="button"
-                onClick={sendSlack}
-                className="inline-flex items-center gap-space-xs rounded-lg bg-primary-container px-space-md py-space-sm font-label-md text-label-md text-on-primary-fixed transition-all hover:bg-primary-fixed active:scale-[0.98]"
-              >
-                <Icon name="send" className="text-body-lg" />
-                <span className="font-bold">Send to Slack</span>
+              <button type="button" onClick={sendSlack} className="inline-flex items-center gap-space-xs rounded-lg border border-hairline bg-surface-container px-space-md py-space-sm font-label-md text-label-md text-on-surface shadow-sm transition-all hover:border-hairline-strong hover:bg-surface-container-high">
+                <Icon name="send" className="text-body-lg text-on-surface-variant" />
+                <span>Send to Slack</span>
               </button>
             </div>
           )}

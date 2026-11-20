@@ -4,6 +4,8 @@ import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { Router, type Request } from 'express';
 import { config } from '../config.js';
 import { voiceTurn } from '../voice/agent.js';
+import { loadScope } from '../voice/data.js';
+import { parseScopeHeader } from '../voice/scope.js';
 
 export const chatRouter = Router();
 
@@ -28,6 +30,9 @@ chatRouter.post('/chat/completions', async (req, res) => {
   }
   const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
   const sessionId = sessionOf(req);
+  // Scope travels with the session (X-Tatva-Scope: meeting:<id>, set by the web app's
+  // invite-agent) and is enforced in every tool and action, not only in the prompt.
+  const scope = await loadScope(parseScopeHeader(req.get('x-tatva-scope'))).catch(() => ({ kind: 'all' as const }));
   const stream = req.body?.stream !== false;
   const id = `chatcmpl-${randomUUID()}`;
   const created = Math.floor(Date.now() / 1000);
@@ -49,7 +54,7 @@ chatRouter.post('/chat/completions', async (req, res) => {
 
   let text = '';
   try {
-    for await (const piece of voiceTurn(sessionId, messages, abort.signal)) {
+    for await (const piece of voiceTurn(sessionId, messages, abort.signal, scope)) {
       if (!piece) continue;
       text += piece;
       if (stream && !res.writableEnded) res.write(chunk({ content: piece }));
@@ -63,7 +68,7 @@ chatRouter.post('/chat/completions', async (req, res) => {
     text += sorry;
     if (stream && !res.writableEnded) res.write(chunk({ content: sorry }));
   }
-  console.log(`[voice] ${sessionId} ${Date.now() - started}ms: ${text.trim().slice(0, 200)}`);
+  console.log(`[voice] ${sessionId}${scope.kind === 'meeting' ? ` [${scope.title}]` : ''} ${Date.now() - started}ms: ${text.trim().slice(0, 200)}`);
 
   if (stream) {
     if (!res.writableEnded) {

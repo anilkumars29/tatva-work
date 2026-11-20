@@ -46,14 +46,17 @@ export interface DashboardData {
   pending: PendingItem[];
 }
 
+/** "Up next": a calendar event or a planned follow-up from a meeting, whichever is earliest. */
 export interface CalendarEvent {
   title: string;
   when: string;
   start: string;
   attendees: string[];
-  created_by_tatva: boolean;
+  kind: 'calendar_event' | 'follow_up';
+  /** False for a follow-up that isn't on the calendar yet. */
+  on_calendar: boolean;
+  from_meeting: string | null;
   link: string | null;
-  meet_link: string | null;
 }
 
 export interface Contact {

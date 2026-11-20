@@ -7,7 +7,8 @@ import { zoneOffset } from '../pipeline/dates.js';
 import { supabase } from '../supabase.js';
 import { recomputeTimeSaved } from '../pipeline/timesaved-db.js';
 import { logActivity } from './activity.js';
-import { dateTimeLabel, dayLabel, meetingDetails, resolveContact, resolveMeeting, type MeetingDetails } from './data.js';
+import { dateTimeLabel, dayLabel, meetingDetails, meetingInScope, resolveContact, resolveMeeting, type MeetingDetails } from './data.js';
+import { ALL, OutOfScopeError, outOfScopeMessage, type Scope } from './scope.js';
 
 export const ACTION_KINDS = ['send_email', 'post_to_slack', 'create_calendar_event', 'add_tracker_row', 'log_issue'] as const;
 export type ActionKind = (typeof ACTION_KINDS)[number];
@@ -105,8 +106,22 @@ const sectionWords: Record<Section, string> = {
 const joinWords = (words: string[]) =>
   words.length <= 1 ? (words[0] ?? '') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
 
-async function loadMeeting(ref: unknown): Promise<MeetingDetails | null> {
+/**
+ * The meeting an action uses. Meeting mode: always the scoped meeting (when
+ * `scopeByDefault` or a meeting was named); naming another meeting is refused.
+ */
+async function loadMeeting(ref: unknown, scope: Scope = ALL, scopeByDefault = true): Promise<MeetingDetails | null> {
   const name = str(ref);
+  if (scope.kind === 'meeting') {
+    if (!name && !scopeByDefault) return null;
+    try {
+      await meetingInScope(scope, name);
+    } catch (err) {
+      if (err instanceof OutOfScopeError) throw new UserFacingError(err.message);
+      throw err;
+    }
+    return meetingDetails(scope.meetingId);
+  }
   if (!name) return null;
   const row = await resolveMeeting(name);
   if (!row) throw new UserFacingError(`I couldn't find a meeting matching "${name}".`);
@@ -161,8 +176,8 @@ function afterAction(args: Record<string, unknown>) {
  * stores it as pending, and returns the sentence to read back.
  * Throws UserFacingError for things the user should clarify.
  */
-export async function proposeAction(sessionId: string, kind: ActionKind, input: Record<string, unknown>): Promise<PendingAction> {
-  const { args, summary } = await prepareAction(kind, input);
+export async function proposeAction(sessionId: string, kind: ActionKind, input: Record<string, unknown>, scope: Scope = ALL): Promise<PendingAction> {
+  const { args, summary } = await prepareAction(kind, input, scope);
   // One pending action per session: a new proposal replaces the old one.
   await supabase.from('pending_actions').update({ status: 'cancelled' }).eq('session_id', sessionId).in('status', ['pending', 'failed']);
   const { data, error } = await supabase
@@ -175,25 +190,26 @@ export async function proposeAction(sessionId: string, kind: ActionKind, input: 
   return data as PendingAction;
 }
 
-export async function prepareAction(kind: ActionKind, input: Record<string, unknown>): Promise<{ args: Record<string, unknown>; summary: string }> {
+export async function prepareAction(kind: ActionKind, input: Record<string, unknown>, scope: Scope = ALL): Promise<{ args: Record<string, unknown>; summary: string }> {
   switch (kind) {
     case 'send_email': {
       const toRaw = str(input.to);
       if (!toRaw) throw new UserFacingError('Who should I send the email to?');
       const to = await resolveContact(toRaw);
       if (!to) throw new UserFacingError(`I don't have an email address for ${toRaw}. What's their email?`);
-      const meeting = await loadMeeting(input.meeting);
+      const meeting = await loadMeeting(input.meeting, scope, !str(input.body));
       const sections = sectionsFrom(input.sections, ['summary', 'action_items']);
       const note = str(input.body);
       if (!meeting && !note) throw new UserFacingError('What should the email say?');
       const subject =
         str(input.subject) ?? (meeting ? `${joinWords(sections.map((s) => sectionWords[s])).replace(/^./, (c) => c.toUpperCase())}: ${meeting.title}` : 'Note from Tatva');
-      const greeting = `Hi ${to.contact ? to.name.split(' ')[0] : 'there'},`;
+      const named = to.name !== to.email; // a contact or the user's profile, not a bare address
+      const greeting = `Hi ${named ? to.name.split(' ')[0] : 'there'},`;
       const body = [greeting, note, meeting ? `From "${meeting.title}" (${meeting.date}):\n\n${renderMeeting(meeting, sections, '-')}` : null]
         .filter(Boolean)
         .join('\n\n')
         .concat('\n\nSent by Tatva');
-      const who = to.contact ? to.name : to.email;
+      const who = named ? to.name : to.email;
       const what = meeting ? `the ${joinWords(sections.map((s) => sectionWords[s]))} from ${meeting.title}` : `a note`;
       return {
         args: { to: to.email, to_name: to.name, subject, body, meeting_id: meeting?.id ?? null },
@@ -202,7 +218,7 @@ export async function prepareAction(kind: ActionKind, input: Record<string, unkn
     }
 
     case 'post_to_slack': {
-      const meeting = await loadMeeting(input.meeting);
+      const meeting = await loadMeeting(input.meeting, scope, !str(input.message));
       const note = str(input.message);
       if (!meeting && !note) throw new UserFacingError('What should I post in Slack?');
       const sections = sectionsFrom(input.sections, ['summary', 'decisions', 'action_items']);
@@ -236,6 +252,10 @@ export async function prepareAction(kind: ActionKind, input: Record<string, unkn
         if (found) attendees.push({ name: found.name, email: found.email });
         else unknown.push(person);
       }
+      // Booking a planned follow-up (brief_me's follow_up_id) marks it scheduled.
+      const followUpId = str(input.follow_up_id) ?? str(input.discuss_later_id);
+      const followUpMeeting = await meetingOfTopic(followUpId);
+      if (scope.kind === 'meeting' && followUpMeeting && followUpMeeting !== scope.meetingId) throw new UserFacingError(outOfScopeMessage(scope));
       if (unknown.length && !input.skip_unknown_attendees)
         throw new UserFacingError(`I don't have an email for ${joinWords(unknown)}. Should I leave them out, or what's their email?`);
       const who = attendees.length ? `, inviting ${joinWords(attendees.map((a) => a.name.split(' ')[0]))}` : '';
@@ -246,15 +266,15 @@ export async function prepareAction(kind: ActionKind, input: Record<string, unkn
           duration_minutes: minutes,
           attendees,
           description: str(input.description) ?? null,
-          discuss_later_id: str(input.discuss_later_id) ?? null,
-          meeting_id: await meetingOfTopic(str(input.discuss_later_id)),
+          discuss_later_id: followUpId ?? null,
+          meeting_id: followUpMeeting ?? (scope.kind === 'meeting' ? scope.meetingId : null),
         },
         summary: `I'll create "${title}" on ${dateTimeLabel(start)} for ${minutes} minutes${who}. Shall I go ahead?`,
       };
     }
 
     case 'add_tracker_row': {
-      const meeting = await loadMeeting(input.meeting);
+      const meeting = await loadMeeting(input.meeting, scope, !str(input.task));
       let rows: { task: string; owner: string; due: string }[] = [];
       const task = str(input.task);
       if (task) rows.push({ task, owner: str(input.owner) ?? '', due: str(input.due) ?? '' });
@@ -278,7 +298,7 @@ export async function prepareAction(kind: ActionKind, input: Record<string, unkn
       const ownerRaw = str(input.owner);
       const owner = ownerRaw ? await resolveContact(ownerRaw) : null;
       if (ownerRaw && !owner) throw new UserFacingError(`I don't have ${ownerRaw} in contacts. Who should own this issue?`);
-      const meeting = str(input.meeting) ? await loadMeeting(input.meeting) : null;
+      const meeting = str(input.meeting) || scope.kind === 'meeting' ? await loadMeeting(input.meeting, scope) : null;
       const ownerName = owner?.name ?? null;
       const handle = owner?.contact?.slack_handle ?? null;
       const who = ownerName ? ` for ${ownerName.split(' ')[0]}` : '';

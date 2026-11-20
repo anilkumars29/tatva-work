@@ -11,6 +11,7 @@ import {
 } from 'agora-agents';
 import { ClientStartRequest, AgentResponse } from '@/types/conversation';
 import { DEFAULT_AGENT_UID } from '@/lib/agora';
+import { serverKey, serverUrl } from '@/lib/auth';
 
 // Tatva voice agent. When CUSTOM_LLM_URL is set, Agora calls the Tatva
 // server (server/, POST /v1/chat/completions, usually via a cloudflared tunnel)
@@ -19,8 +20,41 @@ import { DEFAULT_AGENT_UID } from '@/lib/agora';
 // prompt is only used by the managed-LLM fallback when CUSTOM_LLM_URL is unset.
 const POOJA_PROMPT = `You are Pooja, the voice assistant of Tatva, a meeting assistant. This is a voice call: reply in one or two short spoken sentences, no lists or markdown. The meeting knowledge base and actions are not connected right now, so if asked about meetings or to send, post or schedule anything, say that the Tatva server isn't connected yet.`;
 
-// First thing the agent says when a user joins the channel.
-const GREETING = `Hi, I'm Pooja from Tatva. Ask me about your meetings, or tell me what to send or schedule.`;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** GET from the Tatva server with the shared key (server to server); null on any failure. */
+async function tatva<T>(path: string): Promise<T | null> {
+  try {
+    const key = serverKey();
+    const res = await fetch(`${serverUrl()}/api${path}`, {
+      headers: key ? { 'x-tatva-key': key } : undefined,
+      cache: 'no-store',
+      signal: AbortSignal.timeout(6000),
+    });
+    return res.ok ? ((await res.json()) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The conversation's scope and the first thing Pooja says: short, formal, by
+ * the user's first name, and no summary until asked.
+ *   meeting: "Hello Anil. I have the Q4 Vendor Review open. What would you like to know or do?"
+ *   general: "Hello Anil, I'm Pooja from Tatva. How can I help you today?"
+ */
+async function scopeAndGreeting(meetingId: string | null) {
+  const [profile, found] = await Promise.all([
+    tatva<{ profile?: { name?: string | null } }>('/profile'),
+    meetingId ? tatva<{ meeting?: { title?: string | null; status?: string } }>(`/meetings/${meetingId}?transcript=false`) : null,
+  ]);
+  const first = profile?.profile?.name?.trim().split(/\s+/)[0] ?? '';
+  const meeting = meetingId && found?.meeting?.status === 'ready' ? { id: meetingId, title: found.meeting.title || 'this meeting' } : null;
+  const greeting = meeting
+    ? `Hello${first ? ` ${first}` : ''}. I have the ${meeting.title} open. What would you like to know or do?`
+    : `Hello${first ? ` ${first}` : ''}, I'm Pooja from Tatva. How can I help you today?`;
+  return { meeting, greeting };
+}
 
 // agentUid identifies the AI in the RTC channel and shares its default with the client.
 const agentUid = String(DEFAULT_AGENT_UID);
@@ -53,6 +87,7 @@ export async function POST(request: NextRequest) {
 
     const body: ClientStartRequest = await request.json();
     const { requester_id, channel_name } = body;
+    const meetingId = typeof body.meeting_id === 'string' && UUID.test(body.meeting_id) ? body.meeting_id.toLowerCase() : null;
 
     // Validate required env vars on first request so misconfiguration surfaces
     // with a clear error message rather than a silent failure.
@@ -65,6 +100,8 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+
+    const { meeting, greeting } = await scopeAndGreeting(meetingId);
 
     // --- 2. Build and start the agent ---
 
@@ -86,15 +123,16 @@ export async function POST(request: NextRequest) {
           url: customLlmUrl,
           apiKey: requireEnv('CUSTOM_LLM_API_KEY'),
           model: 'tatva-voice',
-          headers: { 'X-Tatva-Session': channel_name },
-          greetingMessage: GREETING,
+          // The scope travels with every LLM request; the server enforces it.
+          headers: { 'X-Tatva-Session': channel_name, 'X-Tatva-Scope': meeting ? `meeting:${meeting.id}` : 'all' },
+          greetingMessage: greeting,
           failureMessage: 'Sorry, I lost my train of thought. Could you say that again?',
           maxHistory: 12,
           params: { max_tokens: 400 },
         })
       : new OpenAI({
           model: 'gpt-4o-mini',
-          greetingMessage: GREETING,
+          greetingMessage: greeting,
           failureMessage: 'Please wait a moment.',
           maxHistory: 15,
           params: { max_tokens: 1024, temperature: 0.7, top_p: 0.95 },
@@ -102,7 +140,7 @@ export async function POST(request: NextRequest) {
     const agent = new Agent({
       client,
       instructions: POOJA_PROMPT,
-      greeting: GREETING,
+      greeting,
       failureMessage: 'Please wait a moment.',
       maxHistory: 50,
       // VAD controls how the agent detects the start and end of a user's turn.
@@ -190,6 +228,7 @@ export async function POST(request: NextRequest) {
       agent_id: agentId,
       create_ts: Math.floor(Date.now() / 1000),
       state: 'RUNNING',
+      scope: meeting ? { kind: 'meeting', meeting_id: meeting.id, title: meeting.title } : { kind: 'all' },
     } as AgentResponse);
   } catch (error) {
     console.error('Error starting conversation:', error);

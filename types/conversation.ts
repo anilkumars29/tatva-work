@@ -10,6 +10,8 @@ export interface AgoraTokenData {
 export interface ClientStartRequest {
   requester_id: string;
   channel_name: string;
+  /** Talk to Tatva opened from a meeting: Pooja is focused on that meeting only. */
+  meeting_id?: string | null;
 }
 
 export interface StopConversationRequest {
@@ -20,6 +22,7 @@ export interface AgentResponse {
   agent_id: string;
   create_ts: number;
   state: string;
+  scope?: { kind: 'all' } | { kind: 'meeting'; meeting_id: string; title: string };
 }
 
 export interface AgoraRenewalTokens {

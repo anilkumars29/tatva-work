@@ -3,6 +3,7 @@ import { config } from '../config.js';
 import { attachmentCitation } from '../pipeline/citation.js';
 import { embed } from '../pipeline/embed.js';
 import { getProfile } from '../profile.js';
+import { ALL, OutOfScopeError, outOfScopeMessage, refersToThisMeeting, type Scope } from './scope.js';
 import { supabase } from '../supabase.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -118,6 +119,33 @@ export async function resolveMeeting(ref: string | undefined | null): Promise<Me
   const hits = await searchKnowledge(text, { count: 3 });
   const id = hits.find((h) => h.meeting_id)?.meeting_id;
   return meetings.find((m) => m.id === id) ?? null;
+}
+
+/** Loads the meeting a scope header names; unknown or unfinished meetings fall back to general. */
+export async function loadScope(meetingId: string | null): Promise<Scope> {
+  if (!meetingId) return ALL;
+  const { data } = await supabase.from('meetings').select('id, title, recorded_at, created_at, status').eq('id', meetingId).maybeSingle();
+  if (!data || data.status !== 'ready') return ALL;
+  return { kind: 'meeting', meetingId: data.id, title: data.title ?? 'this meeting', date: dayLabel(data.recorded_at ?? data.created_at) };
+}
+
+/**
+ * Resolves a meeting reference within the scope. General: as resolveMeeting().
+ * Meeting mode: always the scoped meeting; a reference that clearly names a
+ * different meeting throws OutOfScopeError (Pooja then says she's focused).
+ */
+export async function meetingInScope(scope: Scope, ref: string | undefined | null): Promise<MeetingRow | null> {
+  if (scope.kind === 'all') return resolveMeeting(ref);
+  const own: MeetingRow = { id: scope.meetingId, title: scope.title, recorded_at: null, created_at: new Date().toISOString() };
+  const text = ref?.trim();
+  if (refersToThisMeeting(text) || text === scope.meetingId) return own;
+  const stop = new Set(['the', 'a', 'an', 'meeting', 'call', 'sync', 'review', 'of', 'on', 'in', 'about', 'with', 'our', 'my', 'this']);
+  const words = norm(text!).split(' ').filter((w) => w.length > 2 && !stop.has(w));
+  const title = norm(scope.title);
+  if (!words.length || words.some((w) => title.includes(w))) return own;
+  const other = await resolveMeeting(text);
+  if (other && other.id !== scope.meetingId) throw new OutOfScopeError(outOfScopeMessage(scope));
+  return own;
 }
 
 export interface KnowledgeHit {

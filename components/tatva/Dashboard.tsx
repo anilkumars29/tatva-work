@@ -87,7 +87,7 @@ export function RetryMeetingButton({ meetingId, onRetried, className = '' }: { m
       className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-hairline bg-surface-container-high px-3 py-1 font-label-md text-caption text-on-surface hover:border-hairline-strong hover:bg-surface-bright ${className}`}
     >
       {busy ? <Spinner /> : <Icon name="refresh" className="text-sm text-on-surface-variant" />}
-      <span>{busy ? 'Retrying�' : 'Retry'}</span>
+      <span>{busy ? 'Retrying…' : 'Retry'}</span>
     </button>
   );
 }
@@ -342,10 +342,10 @@ export default function Dashboard() {
                 ) : event ? (
                   <>
                     <div className="flex items-center justify-between">
-                      {event.created_by_tatva ? (
+                      {!event.on_calendar ? (
                         <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-container-lowest px-2 py-0.5 font-label-sm text-label-sm text-primary-container">
                           <span className="h-1.5 w-1.5 rounded-full bg-primary-container" />
-                          Created by Tatva
+                          Planned · not on calendar yet
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-container-lowest px-2 py-0.5 font-label-sm text-label-sm text-secondary">
@@ -367,6 +367,12 @@ export default function Dashboard() {
                           <span className="truncate" title={event.attendees.join(', ')}>{event.attendees.join(', ')}</span>
                         </div>
                       )}
+                      {event.from_meeting && (
+                        <div className="mt-1 flex items-center gap-2 font-caption text-caption text-secondary">
+                          <Icon name="forum" className="text-sm" />
+                          <span className="truncate" title={`Follow-up from ${event.from_meeting}`}>Follow-up from {event.from_meeting}</span>
+                        </div>
+                      )}
                     </div>
                     <button
                       type="button"
@@ -379,7 +385,7 @@ export default function Dashboard() {
                   </>
                 ) : (
                   <p className="font-body-sm text-body-sm text-on-surface-variant">
-                    Nothing on your calendar in the next two weeks.
+                    Nothing on your calendar or planned in follow-ups for the next two weeks.
                   </p>
                 )}
               </div>

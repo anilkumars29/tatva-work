@@ -13,7 +13,7 @@ import { ACTION_KINDS, executeNow, executePending, isActionKind, prepareAction, 
 import { getProfile, saveProfile } from '../profile.js';
 import { logActivity } from '../voice/activity.js';
 import { allContacts, recentMeetings } from '../voice/data.js';
-import { nextCalendarEvent } from '../voice/tools.js';
+import { nextUpcoming } from '../voice/tools.js';
 
 export const appRouter = Router();
 
@@ -136,8 +136,20 @@ appRouter.get(
 appRouter.get(
   '/calendar/next',
   handle(async (_req, res) => {
-    const event = await remembered('next-event', 60_000, () => nextCalendarEvent());
-    res.json({ event });
+    // The same "what's next" Pooja uses: calendar events + planned follow-ups, by date.
+    const item = await remembered('next-event', 60_000, () => nextUpcoming());
+    res.json({
+      event: item && {
+        title: item.title,
+        when: item.when,
+        start: item.start,
+        attendees: item.people,
+        kind: item.kind,
+        on_calendar: item.on_calendar,
+        from_meeting: item.from_meeting,
+        link: item.link,
+      },
+    });
   }),
 );
 

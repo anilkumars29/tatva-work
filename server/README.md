@@ -145,6 +145,7 @@ bucket and processed one at a time by `src/pipeline/attachments.ts`:
 
 ## Notes
 
+- **Scope.** The voice endpoint reads `X-Tatva-Scope` (`meeting:<uuid>` or `all`) next to `X-Tatva-Session`; meeting mode limits retrieval, tools and actions to that meeting (`src/voice/scope.ts`). `node scripts/voice-turns.mjs [--meeting=<id>] "question" …` (repo root) sends text turns as Agora would.
 - **One heavy job at a time.** Meetings and attachments share one queue
   (`src/pipeline/jobs.ts`), so the 512 MB instance never transcribes, extracts
   or embeds two things at once. Between steps the pipeline runs a GC

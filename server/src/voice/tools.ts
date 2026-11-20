@@ -5,7 +5,10 @@ import { config } from '../config.js';
 import { executeTool } from '../composio.js';
 import { ACTION_KINDS, cancelPending, isActionKind } from './actions.js';
 import { logActivity } from './activity.js';
-import { dateTimeLabel, dayLabel, meetingDetails, openItems, recentMeetings, resolveMeeting, searchKnowledge } from './data.js';
+import { supabase } from '../supabase.js';
+import { dateTimeLabel, dayLabel, meetingDetails, meetingInScope, openItems, recentMeetings, searchKnowledge } from './data.js';
+import { ALL, OutOfScopeError, type Scope } from './scope.js';
+import { mergeUpcoming, type MergedItem } from './upcoming.js';
 
 const meetingParam = {
   type: 'string',
@@ -64,7 +67,8 @@ const RAW_TOOLS = [
     type: 'function',
     function: {
       name: 'brief_me',
-      description: 'Prepares a briefing for the next calendar meeting, or for a topic, from past meetings and open items.',
+      description:
+        "What's next: upcoming calendar events AND planned follow-ups from meetings, merged and sorted by date (says whether each follow-up is on the calendar), plus a briefing from past meetings and open items. Use for \"brief me\", \"what's next\", \"our next meeting\", \"what are we discussing next\".",
       parameters: {
         type: 'object',
         properties: { topic: { type: ['string', 'null'], description: 'Only if the user names a topic or meeting; otherwise omit.' } },
@@ -114,6 +118,7 @@ const RAW_TOOLS = [
           duration_minutes: { type: 'integer' },
           attendees: { type: 'array', items: { type: 'string' } },
           description: { type: 'string' },
+          follow_up_id: { type: 'string', description: 'When booking a planned follow-up returned by brief_me: its follow_up_id, so it is marked scheduled.' },
         },
         required: ['title', 'start'],
       },
@@ -192,35 +197,43 @@ export const TOOLS = RAW_TOOLS.map((tool) => ({
 
 export { ACTION_KINDS, isActionKind };
 
+/** Meeting mode hides the tools that list or read other meetings. */
+export function toolsFor(scope: Scope) {
+  return scope.kind === 'meeting' ? TOOLS.filter((t) => t.function.name !== 'list_recent_meetings') : TOOLS;
+}
+
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
 
 /** Runs a read tool, logs it, and returns a compact JSON-able result. */
-export async function runReadTool(sessionId: string, name: string, args: Record<string, unknown>): Promise<unknown> {
+export async function runReadTool(sessionId: string, name: string, args: Record<string, unknown>, scope: Scope = ALL): Promise<unknown> {
   const started = Date.now();
   try {
-    const result = await readTool(sessionId, name, args);
+    const result = await readTool(sessionId, name, args, scope);
     void logActivity({ sessionId, tool: name, args, status: 'ok', result, durationMs: Date.now() - started });
     return result;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     void logActivity({ sessionId, tool: name, args, status: 'error', error: message, durationMs: Date.now() - started });
+    if (err instanceof OutOfScopeError) return { error: 'out_of_scope', say_exactly: message };
     return { error: message };
   }
 }
 
-async function readTool(sessionId: string, name: string, args: Record<string, unknown>): Promise<unknown> {
+async function readTool(sessionId: string, name: string, args: Record<string, unknown>, scope: Scope): Promise<unknown> {
+  const inMeeting = scope.kind === 'meeting';
   switch (name) {
     case 'search_knowledge': {
-      const meeting = str(args.meeting) ? await resolveMeeting(str(args.meeting)) : null;
+      const meeting = inMeeting || str(args.meeting) ? await meetingInScope(scope, str(args.meeting)) : null;
       const hits = await searchKnowledge(str(args.query) ?? '', { count: 6, meetingId: meeting?.id });
       return hits.length ? hits.map(({ meeting_id: _id, ...hit }) => hit) : { results: [], note: 'Nothing relevant in the knowledge base.' };
     }
     case 'list_recent_meetings': {
+      if (scope.kind === 'meeting') throw new OutOfScopeError(`I'm focused on ${scope.title} right now. For your other meetings, open Talk to Tatva from the dashboard and I can look across everything.`);
       const limit = Math.min(Number(args.limit) || 5, 10);
       return (await recentMeetings()).slice(0, limit).map((m) => ({ title: m.title, date: dayLabel(m.recorded_at ?? m.created_at) }));
     }
     case 'get_meeting_details': {
-      const row = await resolveMeeting(str(args.meeting));
+      const row = await meetingInScope(scope, str(args.meeting));
       if (!row) return { error: `No meeting matches "${args.meeting}".` };
       const details = await meetingDetails(row.id);
       if (!details) return { error: 'Meeting not found.' };
@@ -228,12 +241,13 @@ async function readTool(sessionId: string, name: string, args: Record<string, un
       return { ...rest, has_google_doc: !!gdoc_url };
     }
     case 'get_open_items': {
-      const meeting = str(args.meeting) ? await resolveMeeting(str(args.meeting)) : null;
+      const meeting = inMeeting || str(args.meeting) ? await meetingInScope(scope, str(args.meeting)) : null;
       return openItems({ owner: str(args.owner), meetingId: meeting?.id });
     }
     case 'brief_me': {
       const topic = str(args.topic);
-      return briefMe(topic && !/^(my |the )?(next|upcoming)( meeting| call)?$/i.test(topic) ? topic : undefined);
+      // "next meeting", "the one we scheduled", "upcoming" are not topics: they mean what's next.
+      return briefMe(topic && !/(next|upcoming|scheduled|coming up|planned)/i.test(topic) ? topic : undefined, scope);
     }
     case 'cancel_pending_action': {
       const cancelled = await cancelPending(sessionId);
@@ -244,56 +258,118 @@ async function readTool(sessionId: string, name: string, args: Record<string, un
   }
 }
 
-/** Next calendar event (if no topic), plus related past knowledge and open items. */
-async function briefMe(topic: string | undefined) {
-  let next: { title: string; when: string; attendees: string[] } | null = null;
-  if (!topic) {
-    next = await nextCalendarEvent().catch((err) => {
-      console.warn('[voice] calendar lookup failed:', err instanceof Error ? err.message : err);
-      return null;
-    });
-    if (!next) {
-      const items = await openItems();
-      const upcoming = items.discuss_later[0];
-      if (upcoming) next = { title: upcoming.topic, when: upcoming.when ?? 'not scheduled yet', attendees: upcoming.people };
-    }
-  }
-  const subject = topic ?? next?.title;
-  if (!subject) return { note: 'No upcoming meetings found on the calendar or in follow-ups.' };
+// ------------------------------------------------------------------ what's next
 
-  const [hits, items] = await Promise.all([searchKnowledge(subject, { count: 4, threshold: 0.3 }), openItems()]);
-  const words = subject.toLowerCase().split(/\W+/).filter((w) => w.length > 3);
-  const related = (text: string) => words.some((w) => text.toLowerCase().includes(w));
+export interface CalendarEventInfo {
+  title: string;
+  when: string;
+  start: string;
+  attendees: string[];
+  created_by_tatva: boolean;
+  link: string | null;
+  meet_link: string | null;
+}
+
+/** Google Calendar events with a start time in the next `days` days (Composio). */
+export async function calendarEvents(days = 14, max = 15): Promise<CalendarEventInfo[]> {
+  const data = await executeTool('googlecalendar', 'GOOGLECALENDAR_EVENTS_LIST', {
+    calendarId: 'primary',
+    timeMin: new Date().toISOString(),
+    timeMax: new Date(Date.now() + days * 86_400_000).toISOString(),
+    singleEvents: true,
+    orderBy: 'startTime',
+    maxResults: max,
+  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const items: any[] = (data as any)?.items ?? (data as any)?.events ?? [];
+  return items
+    .filter((e) => e?.start?.dateTime)
+    .map((event) => ({
+      title: String(event.summary ?? 'Untitled event'),
+      when: dateTimeLabel(event.start.dateTime),
+      start: new Date(event.start.dateTime).toISOString(),
+      attendees: (event.attendees ?? []).map((a: { displayName?: string; email: string }) => a.displayName ?? a.email).slice(0, 6),
+      created_by_tatva: /tatva/i.test(String(event.description ?? '')),
+      link: typeof event.htmlLink === 'string' ? event.htmlLink : null,
+      meet_link: typeof event.hangoutLink === 'string' ? event.hangoutLink : null,
+    }));
+}
+
+export type UpcomingItem = MergedItem;
+
+/**
+ * What's coming up: calendar events + planned follow-ups ("discuss later"),
+ * sorted by date. Meeting mode: only that meeting's follow-ups (each marked
+ * on the calendar or not).
+ */
+export async function upcoming(scope: Scope): Promise<{ items: UpcomingItem[]; calendar_error?: string }> {
+  let calendarError: string | undefined;
+  const meetingId = scope.kind === 'meeting' ? scope.meetingId : null;
+  let query = supabase
+    .from('discuss_later')
+    .select('id, meeting_id, topic, people, suggested_at, status')
+    .in('status', ['open', 'scheduled'])
+    .gte('suggested_at', new Date(Date.now() - 60 * 60_000).toISOString())
+    .order('suggested_at', { ascending: true })
+    .limit(30);
+  if (meetingId) query = query.eq('meeting_id', meetingId);
+  const [events, rows, meetings] = await Promise.all([
+    calendarEvents().catch((err) => {
+      calendarError = err instanceof Error ? err.message : String(err);
+      console.warn('[voice] calendar lookup failed:', calendarError);
+      return [] as CalendarEventInfo[];
+    }),
+    query,
+    recentMeetings().catch(() => []),
+  ]);
+  if (rows.error) throw new Error(`Follow-ups: ${rows.error.message}`);
+  const titleOf = (id: string) =>
+    meetings.find((m) => m.id === id)?.title ?? (scope.kind === 'meeting' && id === scope.meetingId ? scope.title : 'a past meeting');
+  // Re-processed meetings can repeat a topic: keep the first of each.
+  const seen = new Set<string>();
+  const followUps = (rows.data ?? [])
+    .filter((r) => {
+      const key = `${r.topic.toLowerCase().replace(/[^a-z0-9]/g, '')}|${r.suggested_at}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((r) => ({ id: r.id, topic: r.topic, people: r.people ?? [], suggested_at: r.suggested_at, meeting: titleOf(r.meeting_id) }));
+  const items = mergeUpcoming(events, followUps, { onlyFollowUps: !!meetingId }).map((i) => ({ ...i, when: dateTimeLabel(i.start) }));
+  return { items, ...(calendarError ? { calendar_error: calendarError } : {}) };
+}
+
+/** "Brief me" / "what's next": the merged upcoming list, then context for the next item (or a topic). */
+async function briefMe(topic: string | undefined, scope: Scope) {
+  const meetingId = scope.kind === 'meeting' ? scope.meetingId : undefined;
+  const up: { items: UpcomingItem[]; calendar_error?: string } = topic ? { items: [] } : await upcoming(scope);
+  const next = up.items[0] ?? null;
+  const subject = topic ?? next?.title;
+  if (!subject)
+    return {
+      note: scope.kind === 'meeting' ? `No upcoming follow-ups were planned in ${scope.title}.` : 'Nothing upcoming on the calendar or in planned follow-ups.',
+    };
+  const [hits, items] = await Promise.all([searchKnowledge(subject, { count: 4, threshold: 0.3, meetingId }), openItems({ meetingId })]);
+  const subjectWords = subject.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3);
+  const related = (text: string) => subjectWords.some((w) => text.toLowerCase().includes(w));
+  const people = next?.people.length ? ` with ${next.people.join(' and ')}` : '';
   return {
-    next_meeting: next,
+    next,
+    upcoming: up.items.slice(0, 5),
+    ...(next && !next.on_calendar
+      ? { say_about_next: `${next.title}${people} is planned for ${next.when} but isn't on the calendar yet. Say exactly that, then ask "Shall I add it?" (if yes: create_calendar_event with its follow_up_id, title, start and people).` }
+      : {}),
     topic: subject,
     from_past_meetings: hits.map((h) => `${h.meeting}: ${h.content.slice(0, 250)}`),
     related_open_items: items.action_items.filter((a) => related(a.task)).slice(0, 5),
     all_open_item_count: items.action_items.length,
-    parked_topics: items.discuss_later.slice(0, 3),
+    ...(up.calendar_error ? { calendar_note: 'Google Calendar could not be read; only planned follow-ups are listed.' } : {}),
   };
 }
 
-export async function nextCalendarEvent() {
-  const data = await executeTool('googlecalendar', 'GOOGLECALENDAR_EVENTS_LIST', {
-    calendarId: 'primary',
-    timeMin: new Date().toISOString(),
-    timeMax: new Date(Date.now() + 14 * 86_400_000).toISOString(),
-    singleEvents: true,
-    orderBy: 'startTime',
-    maxResults: 5,
-  });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const items: any[] = (data as any)?.items ?? (data as any)?.events ?? [];
-  const event = items.find((e) => e?.start?.dateTime);
-  if (!event) return null;
-  return {
-    title: String(event.summary ?? 'Untitled event'),
-    when: dateTimeLabel(event.start.dateTime),
-    start: String(event.start.dateTime),
-    attendees: (event.attendees ?? []).map((a: { displayName?: string; email: string }) => a.displayName ?? a.email).slice(0, 6),
-    created_by_tatva: /tatva/i.test(String(event.description ?? '')),
-    link: typeof event.htmlLink === 'string' ? event.htmlLink : null,
-    meet_link: typeof event.hangoutLink === 'string' ? event.hangoutLink : null,
-  };
+/** First upcoming item for the dashboard's "Up next" card (calendar events and follow-ups). */
+export async function nextUpcoming() {
+  const { items, calendar_error } = await upcoming(ALL);
+  if (calendar_error && !items.length) throw new Error(calendar_error);
+  return items[0] ?? null;
 }

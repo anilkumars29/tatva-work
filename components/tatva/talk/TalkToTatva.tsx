@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { RTMClient } from 'agora-rtm';
 import { useApi } from '@/hooks/use-api';
@@ -37,6 +37,14 @@ const CHIPS = [
   { text: 'Post the summary in Slack', icon: 'tag', color: 'text-secondary' },
   { text: 'Schedule a follow-up', icon: 'calendar_add_on', color: 'text-primary-fixed' },
 ];
+// Meeting mode: everything is about the meeting in focus.
+const MEETING_CHIPS = [
+  { text: 'What was decided?', icon: 'gavel', color: 'text-primary-container' },
+  { text: "What's still pending from this meeting?", icon: 'check_circle', color: 'text-tertiary-fixed' },
+  { text: "What's our next meeting about?", icon: 'event_upcoming', color: 'text-primary-fixed' },
+  { text: 'Post the summary in Slack', icon: 'tag', color: 'text-secondary' },
+];
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 interface Pending {
   id: string;
   created_at: string;
@@ -140,7 +148,17 @@ function PendingPreview({ p }: { p: Pending }) {
 
 export default function TalkToTatva() {
   const params = useSearchParams();
+  const router = useRouter();
   const { toast } = useTatvaUi();
+
+  // ------------------------------------------------------------- scope
+  // /talk?meeting=<id> ("Ask Tatva about this meeting") = meeting mode: Pooja
+  // only uses that meeting. /talk = all meetings. The server enforces it.
+  const meetingParam = params.get('meeting');
+  const scopeId = meetingParam && UUID_RE.test(meetingParam) ? meetingParam : null;
+  const scopeMeeting = useApi<{ meeting: { id: string; title: string | null; status: string } }>(scopeId ? `/meetings/${scopeId}?transcript=false` : null);
+  const focus = scopeId && scopeMeeting.data?.meeting.status === 'ready' ? { id: scopeId, title: scopeMeeting.data.meeting.title || 'this meeting' } : null;
+  const chips = scopeId ? MEETING_CHIPS : CHIPS;
 
   // ------------------------------------------------------------- session
   const [phase, setPhase] = useState<'idle' | 'starting' | 'live' | 'ending'>('idle');
@@ -178,7 +196,7 @@ export default function TalkToTatva() {
         fetch('/api/invite-agent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ requester_id: token.uid, channel_name: token.channel }),
+          body: JSON.stringify({ requester_id: token.uid, channel_name: token.channel, meeting_id: scopeId }),
         }).then(async (r) => {
           const body = await r.json();
           if (!r.ok) throw new Error(body.error ?? 'Could not start Pooja');
@@ -203,7 +221,7 @@ export default function TalkToTatva() {
       setPhase('idle');
       toast(`Couldn't start the conversation: ${e instanceof Error ? e.message : String(e)}`, 'error');
     }
-  }, [phase, toast]);
+  }, [phase, toast, scopeId]);
 
   const end = useCallback(async () => {
     setPhase('ending');
@@ -271,22 +289,20 @@ export default function TalkToTatva() {
     return () => clearTimeout(t);
   }, [voiceApi, sendNow]);
 
-  // ?meeting=<id> ("Ask Tatva") and ?brief=1 ("Brief me") start the call with an intent.
+  // ?brief=1 (the dashboard's "Brief me") starts the call with that question.
+  // ?meeting=<id> only sets the scope: Pooja greets and waits, no summary until asked.
   const intentHandled = useRef(false);
   useEffect(() => {
-    if (intentHandled.current) return;
-    const meetingId = params.get('meeting');
-    const brief = params.get('brief');
-    if (!meetingId && !brief) return;
+    if (intentHandled.current || !params.get('brief')) return;
     intentHandled.current = true;
-    (async () => {
-      if (brief) ask('Brief me for my next meeting.', { queue: true });
-      else if (meetingId) {
-        const r = await api<{ meeting: { title: string | null } }>(`/meetings/${meetingId}?transcript=false`).catch(() => null);
-        ask(r?.meeting.title ? `Tell me about the meeting "${r.meeting.title}": what was decided and what's still pending?` : 'Tell me about my latest meeting.', { queue: true });
-      }
-    })();
+    ask('Brief me for my next meeting.', { queue: true });
   }, [params, ask]);
+
+  /** Leaves meeting mode: a live call ends first, because the scope is fixed when Pooja joins. */
+  const switchToAll = useCallback(async () => {
+    if (phase === 'live' || phase === 'starting') await end();
+    router.replace('/talk');
+  }, [phase, end, router]);
 
   // ------------------------------------------------------------- mute / PTT
   const applyMute = useCallback(
@@ -426,12 +442,44 @@ export default function TalkToTatva() {
               {poojaHere ? 'Meeting knowledge base connected' : 'Answers from your meetings and documents'}
             </p>
           </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-space-sm" aria-live="polite">
+            {scopeId ? (
+              <>
+                <span className="inline-flex min-w-0 items-center gap-2 rounded-full border border-primary-container/40 bg-primary-container/10 px-3 py-1.5 font-label-md text-label-md text-on-surface">
+                  <Icon name="center_focus_strong" className="text-body-md text-primary-container" />
+                  <span className="text-on-surface-variant">Focused on:</span>
+                  {focus ? (
+                    <Link href={`/meetings/${focus.id}`} data-hover="parent" className="max-w-[22rem] truncate font-semibold hover:text-primary-fixed" title={focus.title}>
+                      {focus.title}
+                    </Link>
+                  ) : scopeMeeting.error ? (
+                    <span className="text-error">meeting not found</span>
+                  ) : (
+                    <span className="text-on-surface-variant">loading…</span>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void switchToAll()}
+                  className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-hairline bg-surface-container-high px-3 py-1.5 font-label-md text-label-md text-on-surface hover:border-hairline-strong hover:bg-surface-bright"
+                >
+                  <Icon name="travel_explore" className="text-body-md text-on-surface-variant" />
+                  <span>Switch to all meetings</span>
+                </button>
+              </>
+            ) : (
+              <span className="inline-flex items-center gap-2 rounded-full border border-hairline bg-surface-container-low px-3 py-1.5 font-label-md text-label-md text-on-surface">
+                <Icon name="travel_explore" className="text-body-md text-on-surface-variant" />
+                All meetings
+              </span>
+            )}
+          </div>
         </header>
 
         <div className="grid grid-cols-1 items-start gap-space-lg xl:grid-cols-12">
           <section className="flex min-w-0 flex-col gap-space-lg xl:col-span-8">
             <div className="flex flex-wrap items-center gap-space-sm">
-              {CHIPS.map((c) => (
+              {chips.map((c) => (
                 <button
                   key={c.text}
                   type="button"

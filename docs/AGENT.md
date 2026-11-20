@@ -73,6 +73,17 @@ strict JSON schema) → `saveKnowledge()` (tables) → `indexKnowledge()`
 
 ---
 
+### Conversation scope
+
+Talk to Tatva runs in one of two scopes, fixed when the agent joins:
+
+- **General** (opened from the dashboard, sidebar or top bar): all meetings, documents, contacts and the calendar.
+- **Meeting** (opened from a meeting's "Ask Tatva" button): only that meeting. The web app sends `meeting_id` to `app/api/invite-agent/route.ts`, which verifies the meeting, builds the greeting ("Hello Anil. I have the <title> open. What would you like to know or do?") and adds `X-Tatva-Scope: meeting:<id>` to every LLM request. `server/src/routes/chat.ts` parses it (`parseScopeHeader()`), loads the meeting (`loadScope()` in `voice/data.ts`) and passes the `Scope` to `voiceTurn()`. Enforcement is in code: retrieval is filtered to the meeting, `toolsFor()` removes `list_recent_meetings`, `meetingInScope()` makes every read tool and action use the focused meeting and throws `OutOfScopeError` when another meeting is named, so Pooja says "I'm focused on <title> right now. For your other meetings, open Talk to Tatva from the dashboard…". Tests: `server/test/scope.test.ts`.
+
+### What's next
+
+`brief_me` (`voice/tools.ts` `upcoming()`) merges Google Calendar events with planned follow-ups (`discuss_later` with a suggested time) and sorts them by date (`mergeUpcoming()` in `voice/upcoming.ts`, unit-tested). A follow-up that matches a calendar event (shared words, or the same slot and a word) is marked on the calendar; one that doesn't comes with `say_about_next` ("Store training with Rahul is planned for Thursday at 3 PM but isn't on the calendar yet") and Pooja offers to book it with `create_calendar_event` and its `follow_up_id`, which marks the follow-up scheduled. In meeting mode only that meeting's follow-ups are listed. The dashboard's Up next card (`GET /api/calendar/next`) uses the same list.
+
 ## 2. The system prompts
 
 ### 2.1 Voice agent (Pooja)
