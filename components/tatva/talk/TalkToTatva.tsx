@@ -365,7 +365,11 @@ export default function TalkToTatva() {
   const timeline = useApi<{ activity: Activity[]; pending: Pending | null }>(`/voice/timeline${session ? `?session=${encodeURIComponent(session)}` : ''}`, {
     refreshMs: phase === 'live' ? 1500 : 15_000,
   });
-  const stats = useApi<{ recordings: number; transcript_lines: number; documents: number; chunks: number }>('/voice/stats', { refreshMs: 60_000 });
+  // Meeting mode counts only the focused meeting's recording, transcript and attachments.
+  const stats = useApi<{ recordings: number; transcript_lines: number; documents: number; attachments?: number; chunks: number }>(
+    scopeId ? `/voice/stats?meeting=${scopeId}` : '/voice/stats',
+    { refreshMs: 60_000 },
+  );
   const status = useApi<{ composio: Record<string, boolean> }>('/status');
   const pending = timeline.data?.pending ?? null;
   const steps = (timeline.data?.activity ?? []).filter((a) => !(a.status === 'pending' && pending && a.tool === pending.kind && pending.status === 'pending'));
@@ -787,16 +791,18 @@ export default function TalkToTatva() {
               </div>
             </div>
 
-            <Link href="/knowledge" className="tatva-card group flex items-center justify-between rounded-2xl border border-hairline bg-surface-container-low p-space-md shadow-sm transition-colors hover:border-hairline-strong hover:bg-surface-container">
+            <Link href={scopeId ? `/meetings/${scopeId}` : '/knowledge'} className="tatva-card group flex items-center justify-between rounded-2xl border border-hairline bg-surface-container-low p-space-md shadow-sm transition-colors hover:border-hairline-strong hover:bg-surface-container">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-container-high text-primary-container">
                   <Icon name="folder_open" className="text-headline-sm" />
                 </div>
                 <div className="flex min-w-0 flex-col">
-                  <span className="truncate font-label-md text-label-md font-semibold text-on-surface">Meeting Artifacts Loaded</span>
+                  <span className="truncate font-label-md text-label-md font-semibold text-on-surface">{scopeId ? 'This Meeting’s Artifacts' : 'Meeting Artifacts Loaded'}</span>
                   <span className="font-caption text-caption text-on-surface-variant">
                     {stats.data
-                      ? `${plural(stats.data.recordings, 'recording')} · ${plural(stats.data.transcript_lines, 'transcript line')} · ${plural(stats.data.documents, 'document')}`
+                      ? scopeId
+                        ? `${plural(stats.data.recordings, 'recording')} · ${plural(stats.data.transcript_lines, 'transcript line')} · ${plural(stats.data.attachments ?? 0, 'attachment')}`
+                        : `${plural(stats.data.recordings, 'recording')} · ${plural(stats.data.transcript_lines, 'transcript line')} · ${plural(stats.data.documents, 'document')}`
                       : 'Loading…'}
                   </span>
                 </div>

@@ -725,12 +725,6 @@ export default function MeetingDetails({ id }: { id: string }) {
                   <Icon name="bolt" className="text-headline-sm" filled />
                 </div>
               </div>
-              {openItems > 0 && (
-                <Link href={`/talk?meeting=${m.id}`} className="flex items-center justify-center gap-2 rounded-xl border border-hairline bg-surface-container-low px-space-md py-space-sm font-label-md text-label-md text-on-surface transition-colors hover:border-hairline-strong hover:bg-surface-container">
-                  <Icon name="graphic_eq" className="text-on-surface-variant" />
-                  Ask Tatva about this meeting
-                </Link>
-              )}
             </div>
           </div>
         )}

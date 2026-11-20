@@ -486,7 +486,7 @@ appRouter.post(
 /** Counts for "Meeting Artifacts Loaded". */
 appRouter.get(
   '/voice/stats',
-  handle(async (_req, res) => {
+  handle(async (req, res) => {
     const count = async (table: string, filter?: (q: ReturnType<typeof supabase.from>) => unknown) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let q: any = supabase.from(table).select('*', { count: 'exact', head: true });
@@ -495,6 +495,21 @@ appRouter.get(
       if (error) throw new Error(`${table}: ${error.message}`);
       return n ?? 0;
     };
+    // ?meeting=<id> (Talk to Tatva in meeting mode): that meeting's recording, transcript and attachments only.
+    const meetingId = typeof req.query.meeting === 'string' && UUID.test(req.query.meeting) ? req.query.meeting : null;
+    if (meetingId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const forMeeting = (q: any) => q.eq('meeting_id', meetingId);
+      const [meeting, segments, attachments, chunks] = await Promise.all([
+        supabase.from('meetings').select('audio_path, status').eq('id', meetingId).maybeSingle(),
+        count('transcript_segments', forMeeting),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        count('meeting_attachments', (q: any) => forMeeting(q).eq('status', 'ready')),
+        count('knowledge_chunks', forMeeting),
+      ]);
+      res.json({ scope: 'meeting', recordings: meeting.data?.audio_path ? 1 : 0, transcript_lines: segments, attachments, documents: 0, chunks });
+      return;
+    }
     const [recordings, segments, documents, chunks] = await Promise.all([
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       count('meetings', (q: any) => q.eq('status', 'ready')),
@@ -503,7 +518,7 @@ appRouter.get(
       count('documents', (q: any) => q.eq('status', 'ready')),
       count('knowledge_chunks'),
     ]);
-    res.json({ recordings, transcript_lines: segments, documents, chunks });
+    res.json({ scope: 'all', recordings, transcript_lines: segments, documents, chunks });
   }),
 );
 
