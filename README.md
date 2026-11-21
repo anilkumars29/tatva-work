@@ -8,7 +8,7 @@ what's still open, or to brief you for your next meeting. Then tell her to
 email the summary, post it to Slack, book the follow-up or update the tracker.
 She reads each action back and does it only after you say yes.
 
-**Live:** web app <https://tatva-work.vercel.app> (access code in the submission form) ·
+**Live:** web app <https://tatva-work.vercel.app> (access code : tatva-nped-v82g-6mg) ·
 server <https://tatva-server-iu7c.onrender.com/health> ·
 code <https://github.com/anilkumars29/tatva-work>
 
