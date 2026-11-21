@@ -11,7 +11,7 @@ import { canFreeMemory, rssMb } from './memory.js';
 import { llmStatsSince, llmStatus } from './llm.js';
 import { appRouter } from './routes/app.js';
 import { attachmentsRouter } from './routes/attachments.js';
-import { chatRouter } from './routes/chat.js';
+import { chatRouter, textChatRouter } from './routes/chat.js';
 import { knowledgeRouter } from './routes/knowledge.js';
 import { meetingsRouter } from './routes/meetings.js';
 
@@ -37,6 +37,7 @@ app.use('/api', meetingsRouter);
 app.use('/api', appRouter);
 app.use('/api', knowledgeRouter);
 app.use('/api', attachmentsRouter);
+app.use('/api', textChatRouter);
 app.use('/v1', chatRouter);
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {

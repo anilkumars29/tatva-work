@@ -8,6 +8,13 @@ import { loadScope } from '../voice/data.js';
 import { parseScopeHeader } from '../voice/scope.js';
 
 export const chatRouter = Router();
+/** Typed chat from the web app (mounted under /api, so it needs the server key). */
+export const textChatRouter = Router();
+
+const sorryFor = (err: unknown) =>
+  /429|rate|busy/i.test(String(err))
+    ? " I'm getting a lot of requests right now. Give me a few seconds and ask again."
+    : ' Sorry, something went wrong on my side. Could you say that again?';
 
 function authorized(req: Request): boolean {
   if (!config.voiceApiKey) return false;
@@ -62,9 +69,7 @@ chatRouter.post('/chat/completions', async (req, res) => {
   } catch (err) {
     if (abort.signal.aborted) return;
     console.error('[Pooja] turn failed:', err);
-    const sorry = /429|rate/i.test(String(err))
-      ? " I'm getting a lot of requests right now. Give me a few seconds and ask again."
-      : ' Sorry, something went wrong on my side. Could you say that again?';
+    const sorry = sorryFor(err);
     text += sorry;
     if (stream && !res.writableEnded) res.write(chunk({ content: sorry }));
   }
@@ -84,4 +89,38 @@ chatRouter.post('/chat/completions', async (req, res) => {
       choices: [{ index: 0, message: { role: 'assistant', content: text.trim() }, finish_reason: 'stop' }],
     });
   }
+});
+
+// POST /api/chat/text { session, messages, meeting_id? } -> { reply }
+// The same Pooja turn as voice (prompt, tools, scope, guardrails, yes-before-acting),
+// without Agora: the browser keeps the history and sends it each turn.
+textChatRouter.post('/chat/text', async (req, res) => {
+  const raw = Array.isArray(req.body?.messages) ? req.body.messages : [];
+  const messages = raw
+    .filter((m: unknown): m is { role: string; content: string } => !!m && typeof m === 'object' && ['user', 'assistant'].includes((m as { role?: string }).role ?? '') && typeof (m as { content?: unknown }).content === 'string')
+    .slice(-20)
+    .map((m: { role: string; content: string }) => ({ role: m.role, content: m.content.slice(0, 4000) }));
+  if (!messages.length || messages[messages.length - 1].role !== 'user') {
+    res.status(400).json({ error: 'Send at least one user message.' });
+    return;
+  }
+  const given = typeof req.body?.session === 'string' ? req.body.session.replace(/[^\w-]/g, '').slice(0, 80) : '';
+  const sessionId = given.startsWith('chat-') ? given : `chat-${given || 'default'}`;
+  const meetingId = typeof req.body?.meeting_id === 'string' ? parseScopeHeader(`meeting:${req.body.meeting_id}`) : null;
+  const scope = await loadScope(meetingId).catch(() => ({ kind: 'all' as const }));
+  const abort = new AbortController();
+  res.on('close', () => {
+    if (!res.writableEnded) abort.abort();
+  });
+  const started = Date.now();
+  let text = '';
+  try {
+    for await (const piece of voiceTurn(sessionId, messages, abort.signal, scope)) if (piece) text += piece;
+  } catch (err) {
+    if (abort.signal.aborted) return;
+    console.error('[Pooja] text turn failed:', err);
+    text += sorryFor(err);
+  }
+  console.log(`[Pooja] ${sessionId} (text)${scope.kind === 'meeting' ? ` [${scope.title}]` : ''} ${Date.now() - started}ms: ${text.trim().slice(0, 200)}`);
+  res.json({ reply: text.trim(), session: sessionId, ms: Date.now() - started });
 });

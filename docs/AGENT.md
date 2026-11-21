@@ -112,7 +112,9 @@ strict JSON schema) → `saveKnowledge()` (tables) → `indexKnowledge()`
 
 ### Conversation scope
 
-Talk to Tatva runs in one of two scopes, fixed when the agent joins:
+**Text chat.** With no call open, typing on Talk to Tatva goes to `POST /api/chat/text` (`textChatRouter` in `server/src/routes/chat.ts`, behind the server key like every `/api` route). The browser sends the chat history, a `chat-...` session id and the optional `meeting_id`; the route runs the same `voiceTurn()` (prompt, tools, scope, guardrails, yes-before-acting) and returns `{ reply }` as JSON instead of SSE. Voice starts only from the call buttons; typing during a call still goes into the call.
+
+Talk to Tatva runs in one of two scopes, fixed when the agent joins (or sent with each text chat turn):
 
 - **General** (opened from the dashboard, sidebar or top bar): all meetings, documents, contacts and the calendar.
 - **Meeting** (opened from a meeting's "Ask Tatva" button): only that meeting. The web app sends `meeting_id` to `app/api/invite-agent/route.ts`, which verifies the meeting, builds the greeting ("Hello Anil. I have the <title> open. What would you like to know or do?") and adds `X-Tatva-Scope: meeting:<id>` to every LLM request. `server/src/routes/chat.ts` parses it (`parseScopeHeader()`), loads the meeting (`loadScope()` in `voice/data.ts`) and passes the `Scope` to `voiceTurn()`. Enforcement is in code: retrieval is filtered to the meeting, `toolsFor()` removes `list_recent_meetings`, `meetingInScope()` makes every read tool and action use the focused meeting and throws `OutOfScopeError` when another meeting is named, so Pooja says "I'm focused on <title> right now. For your other meetings, open Talk to Tatva from the dashboard…". Tests: `server/test/scope.test.ts`.

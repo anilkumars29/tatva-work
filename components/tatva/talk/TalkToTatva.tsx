@@ -174,6 +174,11 @@ export default function TalkToTatva() {
   const [typed, setTyped] = useState<Bubble[]>([]);
   const [draft, setDraft] = useState('');
   const queue = useRef<{ text: string; queue: boolean }[]>([]);
+  // Text chat (no call): the same Pooja over /api/chat/text, with its own session
+  // so pending actions and the timeline follow the typed conversation.
+  const chatId = useRef(`chat-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`);
+  const chatLog = useRef<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [chatBusy, setChatBusy] = useState(false);
 
   useEffect(() => {
     import('agora-rtc-react').catch(() => {});
@@ -215,7 +220,6 @@ export default function TalkToTatva() {
       setAgoraData({ ...token, agentId: agent.agent_id });
       setSession(token.channel);
       setStartedAt(Date.now());
-      setTyped([]);
       setMuted(false);
       setPhase('live');
     } catch (e) {
@@ -268,18 +272,42 @@ export default function TalkToTatva() {
     [voiceApi, toast],
   );
 
-  /** Sends now when Pooja is in the call; otherwise starts the call and sends once she joins. */
+  /** Text chat: Pooja answers in writing, no call. Voice starts only from the call buttons. */
+  const chat = useCallback(
+    async (text: string) => {
+      const at = Date.now();
+      setTyped((t) => [...t, { id: `chat-you-${at}-${t.length}`, who: 'you', text, time: at, typed: true }]);
+      chatLog.current = [...chatLog.current, { role: 'user' as const, content: text }].slice(-20);
+      setSession(chatId.current);
+      setChatBusy(true);
+      try {
+        const r = await api<{ reply: string }>('/chat/text', {
+          method: 'POST',
+          json: { session: chatId.current, messages: chatLog.current, meeting_id: scopeId },
+        });
+        const reply = r.reply || "Sorry, I didn't get an answer for that. Could you ask again?";
+        chatLog.current = [...chatLog.current, { role: 'assistant' as const, content: reply }].slice(-20);
+        setTyped((t) => [...t, { id: `chat-pooja-${Date.now()}-${t.length}`, who: 'pooja', text: reply, time: Date.now(), typed: true }]);
+      } catch (e) {
+        chatLog.current = chatLog.current.slice(0, -1);
+        toast(`Couldn't reach Pooja: ${e instanceof Error ? e.message : String(e)}`, 'error');
+      } finally {
+        setChatBusy(false);
+      }
+    },
+    [scopeId, toast],
+  );
+
+  /** In a call: says it to Pooja. While joining: sends once she's in. No call: text chat. */
   const ask = useCallback(
     (text: string, opts: { queue?: boolean } = {}) => {
       const clean = text.trim();
       if (!clean) return;
       if (voiceApi?.ready) void sendNow(clean, opts);
-      else {
-        queue.current.push({ text: clean, queue: opts.queue ?? false });
-        if (phase === 'idle') void start();
-      }
+      else if (phase === 'starting' || phase === 'live') queue.current.push({ text: clean, queue: opts.queue ?? false });
+      else if (!chatBusy) void chat(clean);
     },
-    [voiceApi, sendNow, phase, start],
+    [voiceApi, sendNow, phase, chat, chatBusy],
   );
 
   // Flush queued text once Pooja has joined (queued intents wait for her greeting).
@@ -349,13 +377,13 @@ export default function TalkToTatva() {
         live: String(i.status) === 'in_progress' || String(i.status) === '0',
       }));
     const spoken = new Set(fromVoice.filter((b) => b.who === 'you').map((b) => b.text.trim().toLowerCase()));
-    return [...fromVoice, ...typed.filter((t) => !spoken.has(t.text.trim().toLowerCase()))].sort((a, b) => a.time - b.time);
+    return [...fromVoice, ...typed.filter((t) => t.id.startsWith('chat-') || !spoken.has(t.text.trim().toLowerCase()))].sort((a, b) => a.time - b.time);
   }, [voice?.transcript, typed]);
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [bubbles]);
+  }, [bubbles, chatBusy]);
 
   const downloadTranscript = () => {
     const lines = bubbles.map((b) => `[${timeOf(b.time)}] ${b.who === 'you' ? 'You' : 'Pooja'}: ${b.text}`);
@@ -383,6 +411,9 @@ export default function TalkToTatva() {
       if (voiceApi?.ready && pending.session_id === session) {
         // In the call: answer Pooja, so she runs it (or cancels) and says the result.
         await sendNow(choice === 'approve' ? 'Yes, go ahead.' : 'No, cancel that.');
+      } else if (pending.session_id === chatId.current && phase !== 'live') {
+        // In the text chat: answer in the thread, so her reply shows there.
+        await chat(choice === 'approve' ? 'Yes, go ahead.' : 'No, cancel that.');
       } else {
         const r = await api<{ ok: boolean; say: string }>(`/voice/pending/${pending.id}/${choice === 'approve' ? 'confirm' : 'cancel'}`, { method: 'POST', json: {} });
         toast(r.say, r.ok ? 'success' : 'error');
@@ -405,7 +436,9 @@ export default function TalkToTatva() {
       : phase === 'ending'
         ? 'Ending the conversation…'
         : !live
-          ? 'Start a conversation, or pick a suggestion above'
+          ? chatBusy
+            ? 'Pooja is typing a reply…'
+            : 'Type to chat below, or start a voice conversation'
           : !poojaHere
             ? 'Pooja is joining the call…'
             : muted
@@ -488,7 +521,7 @@ export default function TalkToTatva() {
                 <button
                   key={c.text}
                   type="button"
-                  disabled={phase === 'starting' || phase === 'ending'}
+                  disabled={phase === 'starting' || phase === 'ending' || (!live && chatBusy)}
                   onClick={() => ask(c.text)}
                   className="group flex items-center gap-2 whitespace-nowrap rounded-full border border-hairline bg-surface-container-low px-space-md py-2 text-on-surface shadow-sm transition-all hover:border-hairline-strong hover:bg-surface-container-high disabled:opacity-50"
                 >
@@ -581,7 +614,7 @@ export default function TalkToTatva() {
               <div className="flex items-center justify-between pb-space-sm">
                 <div className="flex items-center gap-2.5">
                   <Icon name="notes" className="text-body-lg text-on-surface-variant" />
-                  <h3 className="font-headline-sm text-headline-sm tracking-tight text-on-surface">Live Session Transcript</h3>
+                  <h3 className="font-headline-sm text-headline-sm tracking-tight text-on-surface">{live ? 'Live Session Transcript' : 'Chat with Pooja'}</h3>
                 </div>
                 <div className="flex items-center gap-2">
                   {startedAt && <span className="font-caption text-caption uppercase tracking-wider text-on-surface-variant">Today, {timeOf(startedAt)}</span>}
@@ -600,7 +633,7 @@ export default function TalkToTatva() {
               <div ref={scrollRef} className="flex max-h-[480px] flex-col gap-space-md overflow-y-auto pr-1">
                 {bubbles.length === 0 && (
                   <p className="py-space-lg text-center font-body-md text-body-md text-on-surface-variant">
-                    {live ? 'Say hello to Pooja, or type below.' : 'Your conversation with Pooja will appear here.'}
+                    {live ? 'Say hello to Pooja, or type below.' : 'Type a message below to chat with Pooja. No call needed, and voice starts only when you press Start conversation.'}
                   </p>
                 )}
                 {bubbles.map((b) =>
@@ -611,7 +644,7 @@ export default function TalkToTatva() {
                           <p className="font-body-md text-body-md leading-relaxed">{b.text}</p>
                         </div>
                         <span className="mr-1 font-caption text-caption text-on-surface-variant">
-                          {timeOf(b.time)} · You{b.typed ? ' (typed)' : ''}
+                          {timeOf(b.time)} · You{b.typed ? (b.id.startsWith('chat-') ? ' (chat)' : ' (typed)') : ''}
                         </span>
                       </div>
                     </div>
@@ -635,10 +668,23 @@ export default function TalkToTatva() {
                           </div>
                           <p className="font-body-md text-body-md leading-relaxed text-secondary-fixed">{b.text}</p>
                         </div>
-                        <span className="ml-1 font-caption text-caption text-on-surface-variant">{timeOf(b.time)} · Pooja</span>
+                        <span className="ml-1 font-caption text-caption text-on-surface-variant">
+                          {timeOf(b.time)} · Pooja{b.typed ? ' (chat)' : ''}
+                        </span>
                       </div>
                     </div>
                   ),
+                )}
+                {chatBusy && !live && (
+                  <div className="flex items-center gap-space-sm self-start" aria-live="polite">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-container text-on-primary shadow-sm">
+                      <span className="font-label-sm text-label-sm font-black">P</span>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-2xl rounded-tl-[4px] bg-surface-container-high px-space-md py-3 font-body-sm text-body-sm text-on-surface-variant">
+                      <Spinner className="text-body-md" />
+                      Pooja is typing…
+                    </div>
+                  </div>
                 )}
               </div>
               <form
@@ -650,20 +696,21 @@ export default function TalkToTatva() {
                 }}
               >
                 <div className="flex items-center pl-4 pr-2">
-                  <Icon name="graphic_eq" className="text-body-lg text-on-surface-variant" />
+                  <Icon name={live ? 'graphic_eq' : 'chat'} className="text-body-lg text-on-surface-variant" />
                 </div>
                 <input
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   className="w-full bg-transparent px-2 py-3.5 font-body-md text-body-md text-on-surface outline-none placeholder:text-on-surface-variant/60"
-                  placeholder={live ? 'Ask or reply to Pooja...' : 'Ask Pooja (starts a call)...'}
+                  placeholder={live ? 'Ask or reply to Pooja...' : 'Message Pooja…'}
+                  aria-label={live ? 'Type to Pooja in the call' : 'Message Pooja'}
                   type="text"
                 />
                 <div className="flex items-center gap-1.5 pr-2">
                   <button
                     aria-label="Send"
                     type="submit"
-                    disabled={!draft.trim() || phase === 'starting' || phase === 'ending'}
+                    disabled={!draft.trim() || phase === 'starting' || phase === 'ending' || (!live && chatBusy)}
                     className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-container text-on-primary shadow-sm transition-all hover:bg-primary-fixed disabled:opacity-40"
                   >
                     <Icon name="keyboard_return" className="text-body-lg font-bold" />

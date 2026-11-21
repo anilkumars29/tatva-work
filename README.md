@@ -110,7 +110,7 @@ Scribe, Analyst and Lens work in the background when a recording or file arrives
 - **Meeting page:** audio with waveform and key-moment pins, searchable transcript that seeks the audio, Google Doc, email / Slack / calendar buttons, attachments.
 - **Attachments:** drop, paste (Ctrl+V) or upload slides, screenshots and PDFs; a vision model reads text and charts; Pooja cites them by name.
 - **Knowledge Base:** semantic search across meetings, attachments and company PDFs.
-- **Talk to Tatva:** live voice agent with transcript, suggestion chips, a text box, and a "What Tatva is doing" timeline with Approve / Cancel.
+- **Talk to Tatva:** live voice agent with transcript, suggestion chips, a text box, and a "What Tatva is doing" timeline with Approve / Cancel. Prefer typing? With no call open the text box is a **text chat** with the same Pooja (same tools, scope and confirm step, via `POST /api/chat/text`); voice starts only when you press Start conversation.
 - **Tracker:** KPIs, filters, sort, search, CSV export, status sync to the Google Sheet, issues with Slack escalation, full activity log.
 - **Time saved:** per meeting and per week, computed from the work Tatva did (notes, items, emails, invites, posts), not guessed by an LLM.
 - **Resilience:** restarts resume interrupted meetings automatically; Retry on failures; memory kept low for the 512 MB server.
