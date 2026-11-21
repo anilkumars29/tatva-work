@@ -149,7 +149,7 @@ async function callLlmOnce(
     }),
     opts.hooks,
   );
-  console.log(`[extract] ${model}: ${response.usage?.prompt_tokens ?? '?'} in + ${response.usage?.completion_tokens ?? '?'} out tokens`);
+  console.log(`[Analyst] ${model}: ${response.usage?.prompt_tokens ?? '?'} in + ${response.usage?.completion_tokens ?? '?'} out tokens`);
 
   const content = response.choices?.[0]?.message?.content;
   if (!content) throw new Error(`LLM returned an empty response from ${model}.`);
@@ -178,7 +178,7 @@ async function callLlm(system: string, user: string, opts: ExtractOptions): Prom
     try {
       const { knowledge, model } = await callLlmOnce(system, user, { ...opts, models });
       if (!extractionLooksEmpty(knowledge, user.length)) return knowledge;
-      console.warn(`[extract] ${model} returned an empty extraction for a real transcript; trying the next model`);
+      console.warn(`[Analyst] ${model} returned an empty extraction for a real transcript; trying the next model`);
       fallback ??= knowledge;
       start = chain.indexOf(model) + 1;
     } catch (err) {
@@ -186,7 +186,7 @@ async function callLlm(system: string, user: string, opts: ExtractOptions): Prom
       if (!INVALID_OUTPUT.test(message)) throw err;
       lastError = err;
       const failed = chain.find((m) => message.includes(m));
-      console.warn(`[extract] invalid structured output${failed ? ` from ${failed}` : ''}, trying the next model: ${message.slice(0, 160)}`);
+      console.warn(`[Analyst] invalid structured output${failed ? ` from ${failed}` : ''}, trying the next model: ${message.slice(0, 160)}`);
       start = failed ? chain.indexOf(failed) + 1 : start + 1;
     }
   }
@@ -250,7 +250,7 @@ export async function extractKnowledge(segments: Segment[], meta: MeetingMeta, o
     // Long meeting: extract each part, then merge the partial results.
     const partials: Knowledge[] = [];
     for (const [i, part] of parts.entries()) {
-      console.log(`[extract] part ${i + 1}/${parts.length}`);
+      console.log(`[Analyst] part ${i + 1}/${parts.length}`);
       partials.push(
         await callLlm(
           system,

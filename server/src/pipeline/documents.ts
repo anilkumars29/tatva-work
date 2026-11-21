@@ -31,7 +31,7 @@ export async function summarize(name: string, text: string, what = 'a company do
     const summary = data.choices?.[0]?.message?.content?.trim();
     if (summary) return summary;
   } catch (err) {
-    console.warn(`[documents] summary failed for ${name}:`, err instanceof Error ? err.message : err);
+    console.warn(`[Lens] summary failed for ${name}:`, err instanceof Error ? err.message : err);
   }
   return excerpt.length > 220 ? `${excerpt.slice(0, 220)}…` : excerpt;
 }
@@ -78,10 +78,10 @@ export async function processDocument(id: string, name: string, bytes: Uint8Arra
     }
     const summary = await summarize(name, pages.join(' '));
     await setDoc(id, { status: 'ready', pages: totalPages, chunk_count: chunks.length, summary, error: null });
-    console.log(`[documents] ${name}: ${totalPages} pages, ${chunks.length} chunks in ${Date.now() - started}ms`);
+    console.log(`[Lens] ${name}: ${totalPages} pages, ${chunks.length} chunks in ${Date.now() - started}ms`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[documents] ${name} failed:`, message);
+    console.error(`[Lens] ${name} failed:`, message);
     await setDoc(id, { status: 'failed', error: message }).catch(() => {});
   }
 }

@@ -343,7 +343,7 @@ export async function executePending(sessionId: string, pending: PendingAction):
     const message = err instanceof Error ? err.message : String(err);
     await setStatus(pending.id, 'failed', { error: message });
     void logActivity({ sessionId, tool: pending.kind, args: pending.args, status: 'error', error: message, durationMs: Date.now() - started });
-    console.error(`[voice] ${pending.kind} failed:`, message);
+    console.error(`[Pooja] ${pending.kind} failed:`, message);
     return { ok: false, say: failureSentence(pending.kind, message), fact: `${pending.kind} failed: ${message.slice(0, 200)}` };
   }
 }

@@ -11,6 +11,7 @@ import { confirmationIntent, dropRepeat, speakable } from './speech.js';
 import { runReadTool, toolsFor } from './tools.js';
 import { ALL, OutOfScopeError, outOfScopeMessage, type Scope } from './scope.js';
 import { asData, toolResultAsData, UNTRUSTED_RULE } from './untrusted.js';
+import { specialistForTool } from '../specialists.js';
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const MAX_ROUNDS = 4;
@@ -144,7 +145,7 @@ async function groqRound(messages: ChatMessage[], signal: AbortSignal, tools: un
     if (response.ok) break;
     const body = await response.text();
     lastError = `${model} ${response.status}: ${body.slice(0, 300)}`;
-    console.warn(`[voice] Groq ${lastError}`);
+    console.warn(`[Pooja] Groq ${lastError}`);
     if (response.status === 429) {
       const { kind, waitMs } = markRateLimited(model, body, response.headers.get('retry-after'));
       // A daily limit won't clear in a few seconds: only per-minute waits count.
@@ -211,7 +212,7 @@ export async function* voiceTurn(
   try {
     pending = await getPending(sessionId);
   } catch (err) {
-    console.warn('[voice] pending lookup failed:', err instanceof Error ? err.message : err);
+    console.warn('[Pooja] pending lookup failed:', err instanceof Error ? err.message : err);
   }
 
   // Confirm step: a pending action runs only on a clear spoken "yes".
@@ -270,7 +271,8 @@ export async function* voiceTurn(
         continue;
       }
       const name = call.function.name;
-      console.log(`[voice] tool ${name} ${JSON.stringify(args)}`);
+      // Pooja orchestrates: each tool belongs to a specialist (Librarian reads, Executor acts).
+      console.log(`[Pooja] -> [${specialistForTool(name).name}] ${name} ${JSON.stringify(args)}`);
       if (isActionKind(name)) {
         try {
           const created = await proposeAction(sessionId, name, args, scope);

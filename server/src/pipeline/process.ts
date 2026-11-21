@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { config } from '../config.js';
 import { AllModelsBusyError } from '../llm.js';
+import { specialistForStep } from '../specialists.js';
 import { freeMemory, rssMb } from '../memory.js';
 import { check, checkRow, supabase, type MeetingStatus } from '../supabase.js';
 import { buildChunks } from './chunk.js';
@@ -28,7 +29,8 @@ async function updateMeeting(id: string, patch: Record<string, unknown>) {
 
 async function setStatus(id: string, status: MeetingStatus, extra: Record<string, unknown> = {}) {
   freeMemory(); // drop the previous step's buffers before the next one starts
-  console.log(`[meeting ${id.slice(0, 8)}] ${status} (rss ${rssMb()} MB)`);
+  const who = specialistForStep(status);
+  console.log(`[meeting ${id.slice(0, 8)}] ${status}${who ? ` -> [${who.name}]` : ''} (rss ${rssMb()} MB)`);
   // While processing, `error` holds a short progress note ("AI service busy…"); a new step clears it.
   await updateMeeting(id, { status, ...(status === 'failed' ? {} : { error: null }), ...extra });
 }

@@ -39,7 +39,7 @@ export async function executeTool(toolkit: string, slug: string, args: Record<st
     if (result?.successful !== false && !result?.error) return result?.data ?? result;
     const message = `${slug} failed: ${typeof result.error === 'string' ? result.error : JSON.stringify(result.error)}`;
     if (attempt >= RETRY_DELAYS_MS.length || !isQuotaError(message)) throw new Error(message);
-    console.warn(`[composio] ${slug} hit a quota/rate limit, retrying in ${RETRY_DELAYS_MS[attempt] / 1000}s`);
+    console.warn(`[Executor] ${slug} hit a quota/rate limit, retrying in ${RETRY_DELAYS_MS[attempt] / 1000}s`);
     await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
   }
 }

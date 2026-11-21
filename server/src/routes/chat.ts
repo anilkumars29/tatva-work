@@ -61,14 +61,14 @@ chatRouter.post('/chat/completions', async (req, res) => {
     }
   } catch (err) {
     if (abort.signal.aborted) return;
-    console.error('[voice] turn failed:', err);
+    console.error('[Pooja] turn failed:', err);
     const sorry = /429|rate/i.test(String(err))
       ? " I'm getting a lot of requests right now. Give me a few seconds and ask again."
       : ' Sorry, something went wrong on my side. Could you say that again?';
     text += sorry;
     if (stream && !res.writableEnded) res.write(chunk({ content: sorry }));
   }
-  console.log(`[voice] ${sessionId}${scope.kind === 'meeting' ? ` [${scope.title}]` : ''} ${Date.now() - started}ms: ${text.trim().slice(0, 200)}`);
+  console.log(`[Pooja] ${sessionId}${scope.kind === 'meeting' ? ` [${scope.title}]` : ''} ${Date.now() - started}ms: ${text.trim().slice(0, 200)}`);
 
   if (stream) {
     if (!res.writableEnded) {

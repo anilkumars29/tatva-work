@@ -48,6 +48,20 @@ Tatva covers the whole loop, **before, during and after** a meeting:
 The full loop, prompts, tools and guardrails are documented with file paths in
 [docs/AGENT.md](docs/AGENT.md).
 
+## Pooja and her specialists
+
+Pooja is the voice agent you talk to, and she orchestrates the specialists:
+
+| Specialist | Job |
+|---|---|
+| **Scribe** | Listens: turns the recording into a timestamped transcript (Groq Whisper) |
+| **Analyst** | Extracts decisions, owners, due dates, numbers and follow-ups (Groq gpt-oss, strict JSON) |
+| **Lens** | Reads slides, screenshots and PDFs, including charts (Groq vision) |
+| **Librarian** | Remembers and retrieves: pgvector search with citations, briefings |
+| **Executor** | Acts in Gmail, Calendar, Slack, Sheets and Docs through Composio, only after your yes |
+
+Scribe, Analyst and Lens work in the background when a recording or file arrives; Librarian and Executor work live as Pooja's tools. Registry: [`server/src/specialists.ts`](server/src/specialists.ts); details in [docs/AGENT.md](docs/AGENT.md#0-pooja-and-her-specialists).
+
 ## How Agora and Murf are used
 
 - **Agora Conversational AI Engine** runs the live voice agent: the web app

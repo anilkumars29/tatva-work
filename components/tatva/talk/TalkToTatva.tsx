@@ -11,6 +11,7 @@ import { api, downloadText, eventDateTime, plural } from '@/lib/tatva';
 import type { AgentResponse, AgoraRenewalTokens, AgoraTokenData } from '@/types/conversation';
 import { ACTION_KINDS, ACTION_VERB, describe, type Activity } from '../activity';
 import { ComingSoon, Icon, Spinner, useTatvaUi } from '../ui';
+import { POOJA, SPECIALISTS, specialistForTool } from '../specialists';
 import type { TranscriptItem, VoiceApi, VoiceState } from './VoiceBridge';
 
 const VoiceBridge = dynamic(() => import('./VoiceBridge'), { ssr: false });
@@ -716,7 +717,10 @@ export default function TalkToTatva() {
                           <span className="shrink-0 whitespace-nowrap font-mono text-caption text-on-surface-variant">{stamp(a.created_at)}</span>
                         </div>
                         {d.detail && <p className="line-clamp-2 font-body-sm text-body-sm text-on-surface-variant">{d.detail}</p>}
-                        {!session && a.session_id && <span className="font-caption text-caption text-on-surface-variant/70">{a.session_id === 'web' ? 'From the app' : 'Voice'}</span>}
+                        <span className="font-caption text-caption text-on-surface-variant/70">
+                          <span className="font-semibold text-primary-container">{specialistForTool(a.tool)}</span>
+                          {!session && a.session_id ? ` · ${a.session_id === 'web' ? 'From the app' : 'Voice'}` : ''}
+                        </span>
                       </div>
                     </div>
                   );
@@ -790,6 +794,29 @@ export default function TalkToTatva() {
                 </div>
               </div>
             </div>
+
+            {/* Pooja orchestrates five specialists (server/src/specialists.ts). */}
+            <section aria-labelledby="team-title" className="rounded-2xl border border-hairline bg-surface-container-low p-space-md shadow-sm">
+              <div className="mb-space-sm flex items-center justify-between">
+                <h3 id="team-title" className="font-label-md text-label-md font-semibold text-on-surface">Pooja&rsquo;s team</h3>
+                <span className="font-caption text-caption text-on-surface-variant">{POOJA.name} orchestrates · asks before acting</span>
+              </div>
+              <ul className="flex flex-col gap-2">
+                {SPECIALISTS.map((s) => (
+                  <li key={s.name} className="flex items-start gap-3">
+                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-container-high text-primary-container">
+                      <Icon name={s.icon} className="text-body-lg" />
+                    </span>
+                    <span className="flex min-w-0 flex-col">
+                      <span className="font-label-md text-label-md font-semibold text-on-surface">
+                        {s.name} <span className="font-caption text-caption font-normal text-on-surface-variant">· {s.when}</span>
+                      </span>
+                      <span className="font-caption text-caption text-on-surface-variant">{s.role}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
 
             <Link href={scopeId ? `/meetings/${scopeId}` : '/knowledge'} className="tatva-card group flex items-center justify-between rounded-2xl border border-hairline bg-surface-container-low p-space-md shadow-sm transition-colors hover:border-hairline-strong hover:bg-surface-container">
               <div className="flex items-center gap-3">

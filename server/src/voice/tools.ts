@@ -316,7 +316,7 @@ export async function upcoming(scope: Scope): Promise<{ items: UpcomingItem[]; c
   const [events, rows, meetings] = await Promise.all([
     calendarEvents().catch((err) => {
       calendarError = err instanceof Error ? err.message : String(err);
-      console.warn('[voice] calendar lookup failed:', calendarError);
+      console.warn('[Pooja] calendar lookup failed:', calendarError);
       return [] as CalendarEventInfo[];
     }),
     query,

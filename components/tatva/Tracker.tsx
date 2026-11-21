@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApi } from '@/hooks/use-api';
 import { api, downloadText, dueLabel, initials, plural, relativeDateTime, toCsv, todayYmd } from '@/lib/tatva';
 import { describe, type Activity } from './activity';
+import { specialistForTool } from './specialists';
 import type { Contact, TrackerItem } from './types';
 import { EmptyState, ErrorState, Field, Icon, inputClass, Skeleton, Spinner, useTatvaUi } from './ui';
 
@@ -563,6 +564,7 @@ export default function Tracker() {
                               <Icon name={badge.icon} className="text-[12px]" />
                               {badge.text}
                             </span>
+                            <span className="rounded-full bg-surface-container-highest px-2 py-0.5 font-caption text-caption font-semibold text-primary-container">{specialistForTool(a.tool)}</span>
                           </div>
                           {d.detail && (
                             <p className="line-clamp-2 break-words font-body-md text-body-md text-on-surface-variant" title={d.detail}>

@@ -97,14 +97,14 @@ export async function transcribe(filePath: string, mimeType: string): Promise<Tr
     };
   }
 
-  console.log(`[transcribe] ${(size / 1024 / 1024).toFixed(1)} MB is over the limit, chunking`);
+  console.log(`[Scribe] ${(size / 1024 / 1024).toFixed(1)} MB is over the limit, chunking`);
   const chunks = await splitIntoChunks(filePath);
   const segments: Segment[] = [];
   let language: string | null = null;
   let durationSeconds = 0;
   try {
     for (const [i, chunk] of chunks.entries()) {
-      console.log(`[transcribe] chunk ${i + 1}/${chunks.length} (starts at ${chunk.start.toFixed(0)}s)`);
+      console.log(`[Scribe] chunk ${i + 1}/${chunks.length} (starts at ${chunk.start.toFixed(0)}s)`);
       const response = await transcribeFile(chunk.file, 'audio/ogg');
       segments.push(...toSegments(response, chunk.start));
       language ??= response.language ?? null;

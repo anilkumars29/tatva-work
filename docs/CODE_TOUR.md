@@ -4,6 +4,10 @@ Open these in VS Code in this order. Each one is a step in the story: a voice
 request comes in, gets grounded in meeting knowledge, becomes a confirmed
 action, and the knowledge it uses was built from a recording.
 
+0. **`server/src/specialists.ts`**: start here. Pooja and the five specialists
+   she orchestrates (Scribe, Analyst, Lens, Librarian, Executor): each one's
+   job, model, tools and code. Every file below belongs to one of them.
+
 1. **`app/api/invite-agent/route.ts`**: where the Agora voice agent is created.
    Deepgram `en-IN` STT, our server as a custom OpenAI-compatible LLM (with the
    channel as the session id), and Murf Falcon TTS as Pooja (`MurfWithStyleTTS`

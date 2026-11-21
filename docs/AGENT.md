@@ -4,6 +4,7 @@ This is a map of the code, not a design wish list. Every claim below points to
 the file and function that implements it. Paths are relative to the repo root;
 `server/src/` is the backend, `app/` and `components/` are the Next.js web app.
 
+- [0. Pooja and her specialists](#0-pooja-and-her-specialists)
 - [1. The agent loop: one voice turn](#1-the-agent-loop-one-voice-turn)
 - [2. The system prompts](#2-the-system-prompts)
 - [3. Tools](#3-tools)
@@ -12,6 +13,42 @@ the file and function that implements it. Paths are relative to the repo root;
 - [6. What is missing](#6-what-is-missing)
 
 ---
+
+## 0. Pooja and her specialists
+
+Pooja is the agent you talk to; she orchestrates five specialists, each with one job, its own code and (where it needs one) its own model. Two work live in the conversation as Pooja's tools; three work in the background pipeline when a recording or file arrives. The names live in one registry, `server/src/specialists.ts` (served at `GET /api/specialists`), and appear in the logs (`[Pooja] -> [Librarian] search_knowledge …`), the activity timeline, the processing steps ("Analyst is extracting decisions & action items…") and the "Pooja's team" card on Talk to Tatva.
+
+```
+                         you speak / type
+                                │
+                    ┌───────────▼───────────┐
+                    │  Pooja (voice agent)  │  reasons with Groq tool calling,
+                    │  orchestrates, asks   │  reads every action back,
+                    │  before acting        │  waits for your yes
+                    └─────┬───────────┬─────┘
+            live, as tools│           │live, after your yes
+              ┌───────────▼──┐     ┌──▼───────────┐
+              │  Librarian   │     │   Executor   │
+              │ remembers &  │     │ acts in your │
+              │ retrieves    │     │ tools        │
+              └──────▲───────┘     └──────────────┘
+                     │ indexes what the pipeline produces
+   ┌─────────────┐  ┌┴────────────┐  ┌─────────────┐
+   │   Scribe    │─►│   Analyst   │  │    Lens     │   background pipeline
+   │   listens   │  │   extracts  │  │ reads slides│   (recording or file arrives)
+   └─────────────┘  └─────────────┘  └─────────────┘
+```
+
+| Specialist | Job | Works | Model | Code |
+|---|---|---|---|---|
+| **Pooja** | The voice agent: understands the request, decides which specialist to call, reads actions back, waits for yes | Live (the agent) | Groq gpt-oss-120b tool calling (fallbacks gpt-oss-20b, qwen3.8-27b); Agora + Deepgram + Murf Falcon | `voice/agent.ts` `voiceTurn()` |
+| **Scribe** | Listens: recording → timestamped transcript | Background | Groq whisper-large-v3-turbo | `pipeline/transcribe.ts` |
+| **Analyst** | Extracts decisions, owners, due dates, numbers, key moments, follow-ups (strict JSON, date checks) | Background | Groq gpt-oss-20b → qwen3.8-27b | `pipeline/extract.ts`, `pipeline/dates.ts` |
+| **Lens** | Reads slides, screenshots and PDFs, including charts and tables | Background (when a file is shared) | Groq qwen3.8-27b vision; unpdf for PDFs | `pipeline/attachments.ts`, `pipeline/documents.ts` |
+| **Librarian** | Remembers and retrieves: indexes everything in pgvector, finds, cites, briefs | Live, as Pooja's tools `search_knowledge`, `get_meeting_details`, `get_open_items`, `brief_me`, `list_recent_meetings` | Local MiniLM embeddings + pgvector | `voice/data.ts`, `voice/tools.ts`, `pipeline/chunk.ts` |
+| **Executor** | Acts in Gmail, Calendar, Slack, Sheets, Docs | Live, as Pooja's tools `send_email`, `post_to_slack`, `create_calendar_event`, `add_tracker_row`, `log_issue`, only after a yes | No model: validated payloads through Composio | `voice/actions.ts`, `composio.ts` |
+
+**How precise to be with judges.** Pooja is the only component with its own reasoning loop; the specialists are focused workers she (or the pipeline) calls, three of them with their own model (Scribe, Analyst, Lens). That is deliberate: in a live voice call every extra reasoning agent adds a model round trip (0.5–2 s), and the safety-critical step (whether an action runs) is decided by the user's yes, not by another model. The same split makes it easy to give a specialist its own loop later (for example, a background follow-through agent) without touching the voice path.
 
 ## 1. The agent loop: one voice turn
 

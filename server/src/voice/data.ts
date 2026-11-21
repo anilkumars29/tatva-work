@@ -70,7 +70,7 @@ export const recentMeetings = cached(30_000, async (): Promise<MeetingRow[]> => 
 export const allContacts = cached(15_000, async (): Promise<Contact[]> => {
   const { data, error } = await supabase.from('contacts').select('name, email, slack_handle, aliases').order('name');
   if (error) {
-    console.warn(`[voice] contacts unavailable: ${error.message}`);
+    console.warn(`[Pooja] contacts unavailable: ${error.message}`);
     return [];
   }
   return data;

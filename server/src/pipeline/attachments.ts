@@ -143,11 +143,11 @@ export async function processAttachment(id: string): Promise<void> {
       'Insert attachment chunks',
     );
     await setRow(id, { ...patch, status: 'ready', chunk_count: chunks.length, error: null });
-    console.log(`[attachments] ${row.name}: ${chunks.length} chunks in ${Date.now() - started}ms`);
+    console.log(`[Lens] ${row.name}: ${chunks.length} chunks in ${Date.now() - started}ms`);
     scheduleDocSync(row.meeting_id);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[attachments] ${id} failed:`, message);
+    console.error(`[Lens] ${id} failed:`, message);
     await setRow(id, { status: 'failed', error: message.slice(0, 500) }).catch(() => {});
   }
 }
@@ -161,5 +161,5 @@ export function enqueueAttachment(id: string) {
 export async function resumeAttachments() {
   const { data } = await supabase.from('meeting_attachments').select('id').eq('status', 'processing');
   for (const row of data ?? []) enqueueAttachment(row.id);
-  if (data?.length) console.log(`[attachments] resuming ${data.length} attachment(s)`);
+  if (data?.length) console.log(`[Lens] resuming ${data.length} attachment(s)`);
 }

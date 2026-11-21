@@ -9,11 +9,12 @@ import { PROCESSING, TOOL_LABELS, type CalendarEvent, type DashboardData, type M
 import { firstName, ownerIsMe, useProfile } from './profile';
 import { EmptyState, ErrorState, Icon, Skeleton, SkeletonRows, Spinner, useTatvaUi } from './ui';
 
+// Each processing step names the specialist doing it (components/tatva/specialists.ts).
 const STEP_LABEL: Record<string, string> = {
-  uploaded: 'Uploaded',
-  transcribing: 'Transcribing audio…',
-  extracting: 'Extracting decisions & action items…',
-  indexing: 'Indexing for search…',
+  uploaded: 'Uploaded, queued for Scribe',
+  transcribing: 'Scribe is transcribing the audio…',
+  extracting: 'Analyst is extracting decisions & action items…',
+  indexing: 'Librarian is indexing it for search…',
 };
 const STEP_INDEX: Record<string, number> = { uploaded: 0, transcribing: 1, extracting: 2, indexing: 3 };
 

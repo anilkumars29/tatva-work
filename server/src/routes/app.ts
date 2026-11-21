@@ -14,6 +14,7 @@ import { getProfile, saveProfile } from '../profile.js';
 import { logActivity } from '../voice/activity.js';
 import { allContacts, recentMeetings } from '../voice/data.js';
 import { nextUpcoming } from '../voice/tools.js';
+import { SPECIALISTS } from '../specialists.js';
 
 export const appRouter = Router();
 
@@ -521,6 +522,11 @@ appRouter.get(
     res.json({ scope: 'all', recordings, transcript_lines: segments, documents, chunks });
   }),
 );
+
+// GET /api/specialists: Pooja and the specialists she orchestrates (src/specialists.ts).
+appRouter.get('/specialists', (_req, res) => {
+  res.json({ specialists: SPECIALISTS });
+});
 
 // Meetings changed: callers that cache the recent list should refresh it.
 export function invalidateMeetingCaches() {
