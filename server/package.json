@@ -18,6 +18,7 @@
     "measure:memory": "node --expose-gc --max-old-space-size=256 --env-file=.env --import tsx scripts/measure-memory.ts",
     "test:e2e": "tsx --env-file=.env scripts/e2e.ts",
     "test": "tsx --test test/*.test.ts",
+    "compare:stt": "tsx --env-file=.env scripts/compare-stt.ts",
     "seed:contacts": "tsx --env-file=.env scripts/seed-contacts.ts",
     "tunnel": "tsx --env-file=.env scripts/tunnel.ts",
     "test:voice": "tsx --env-file=.env scripts/voice-demo.ts",

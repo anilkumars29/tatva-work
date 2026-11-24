@@ -35,6 +35,11 @@ export function describe(a: Activity): { title: string; detail: string; icon: st
       const n = Array.isArray(r) ? r.length : 0;
       return { title: 'Searched the knowledge base', detail: `"${str(args.query)}" · ${plural(n, 'match', 'matches')}`, icon: 'manage_search', tone: 'done' };
     }
+    case 'transcribe': {
+      const who = args.provider === 'finch' ? 'Murf Finch' : 'Groq Whisper';
+      const why = args.provider !== 'finch' && args.fallback_reason ? ` (fallback: ${str(args.fallback_reason)})` : '';
+      return { title: `Transcribed with ${who}`, detail: `${plural(Number(r.segments) || 0, 'segment')}${r.language ? ` · ${str(r.language)}` : ''}${why}`, icon: 'hearing', tone: 'done' };
+    }
     case 'list_recent_meetings':
       return { title: `Listed ${plural(Array.isArray(r) ? r.length : 0, 'recent meeting')}`, detail: 'From Supabase', icon: 'calendar_today', tone: 'done' };
     case 'get_meeting_details':

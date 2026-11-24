@@ -28,6 +28,16 @@ export const config = {
   audioBucket: process.env.SUPABASE_AUDIO_BUCKET?.trim() || 'meeting-audio',
 
   groqApiKey: required('GROQ_API_KEY'),
+  // Scribe: Murf Finch speech-to-text first, Groq Whisper as the fallback (STT_PROVIDER=groq skips Finch).
+  sttProvider: (process.env.STT_PROVIDER?.trim().toLowerCase() === 'groq' ? 'groq' : 'finch') as 'finch' | 'groq',
+  murfApiKey: process.env.MURF_API_KEY?.trim() || '',
+  finchModel: process.env.FINCH_MODEL?.trim() || 'finch_indic_1.0',
+  finchHost: process.env.FINCH_HOST?.trim() || 'https://in.api.murf.ai',
+  // en_IN (default): punctuation, casing and Latin-script names. "auto" can write
+  // Indian names in Devanagari ("राहुल"), which breaks owner matching and extraction.
+  finchLanguage: process.env.FINCH_LANGUAGE?.trim() || 'en_IN',
+  // Background voice cancellation (removes other people's voices in the room).
+  finchBvc: !/^(0|false|off|no)$/i.test(process.env.FINCH_BVC?.trim() ?? ''),
   whisperModel: process.env.GROQ_WHISPER_MODEL?.trim() || 'whisper-large-v3-turbo',
   // Empty string = let Whisper auto-detect the language.
   whisperLanguage: process.env.GROQ_WHISPER_LANGUAGE?.trim() ?? 'en',

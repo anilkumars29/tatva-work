@@ -13,6 +13,7 @@ import { buildMarkdown, createKnowledgeDoc } from './gdoc.js';
 import { runJob } from './jobs.js';
 import { recomputeTimeSaved } from './timesaved-db.js';
 import { transcribe, type Segment } from './transcribe.js';
+import { logActivity } from '../voice/activity.js';
 
 export interface MeetingJob {
   meetingId: string;
@@ -176,7 +177,17 @@ export async function processMeeting(job: MeetingJob): Promise<void> {
 
     // 2. Transcribe.
     await setStatus(meetingId, 'transcribing');
+    const sttStarted = Date.now();
     const transcript = await transcribe(job.filePath, job.mimeType);
+    // Which speech-to-text did the work (Finch, or Whisper as the fallback), for the activity log.
+    void logActivity({
+      sessionId: 'pipeline',
+      tool: 'transcribe',
+      args: { meeting_id: meetingId, provider: transcript.provider, keywords: transcript.keywords, ...(transcript.fallbackReason ? { fallback_reason: transcript.fallbackReason.slice(0, 300) } : {}) },
+      status: 'ok',
+      result: { segments: transcript.segments.length, language: transcript.language, duration_seconds: transcript.durationSeconds },
+      durationMs: Date.now() - sttStarted,
+    });
     if (!transcript.segments.length) throw new Error('No speech detected in the recording.');
     const durationSeconds = Number(meeting.duration_seconds) || transcript.durationSeconds || transcript.segments.at(-1)!.end;
     await updateMeeting(meetingId, {
