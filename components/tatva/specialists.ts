@@ -20,6 +20,7 @@ export const SPECIALISTS: TeamMember[] = [
 
 const LIBRARIAN = new Set(['search_knowledge', 'list_recent_meetings', 'get_meeting_details', 'get_open_items', 'brief_me']);
 const EXECUTOR = new Set(['send_email', 'post_to_slack', 'create_calendar_event', 'add_tracker_row', 'log_issue', 'create_google_doc', 'open_google_doc', 'mark_complete', 'reopen_item']);
+const SCRIBE = new Set(['transcribe']);
 const LENS = new Set(['upload_attachment', 'delete_attachment', 'upload_document']);
 
 /** Who did an activity_log step. */
@@ -27,6 +28,7 @@ export function specialistForTool(tool: string): string {
   if (LIBRARIAN.has(tool)) return 'Librarian';
   if (EXECUTOR.has(tool)) return 'Executor';
   if (LENS.has(tool)) return 'Lens';
+  if (SCRIBE.has(tool)) return 'Scribe';
   return 'Pooja';
 }
 

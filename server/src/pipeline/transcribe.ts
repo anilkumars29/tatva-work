@@ -6,6 +6,9 @@ import { promisify } from 'node:util';
 import ffmpegPath from 'ffmpeg-static';
 import { config } from '../config.js';
 import { groqPost } from '../groq.js';
+import { tag } from '../specialists.js';
+import { transcribeWithFinch } from './finch.js';
+import { loadKeywords } from './keywords.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -83,7 +86,41 @@ async function splitIntoChunks(filePath: string): Promise<{ file: string; start:
   });
 }
 
-export async function transcribe(filePath: string, mimeType: string): Promise<Transcript> {
+export type SttProvider = 'finch' | 'groq-whisper';
+
+export interface TranscribeResult extends Transcript {
+  provider: SttProvider;
+  /** Why Finch was skipped or failed, when Whisper did the work. */
+  fallbackReason: string | null;
+  keywords: number;
+}
+
+/**
+ * Scribe: Murf Finch (finch_indic_1.0) with keyword boosting, falling back to
+ * Groq Whisper on any Finch error. Same Transcript shape either way.
+ */
+export async function transcribe(filePath: string, mimeType: string): Promise<TranscribeResult> {
+  let fallbackReason: string | null = null;
+  let keywords: string[] = [];
+  if (config.sttProvider === 'finch' && config.murfApiKey) {
+    keywords = await loadKeywords().catch(() => []);
+    try {
+      const t = await transcribeWithFinch(filePath, keywords);
+      if (t.segments.length) return { ...t, provider: 'finch', fallbackReason: null, keywords: keywords.length };
+      fallbackReason = 'Finch returned no speech';
+    } catch (err) {
+      fallbackReason = err instanceof Error ? err.message : String(err);
+    }
+    console.warn(`${tag('scribe')} Finch failed (${fallbackReason}), falling back to Groq Whisper`);
+  } else {
+    fallbackReason = config.sttProvider === 'groq' ? 'STT_PROVIDER=groq' : 'MURF_API_KEY not set';
+  }
+  const t = await transcribeWhisper(filePath, mimeType);
+  return { ...t, provider: 'groq-whisper', fallbackReason, keywords: 0 };
+}
+
+/** Groq Whisper with the lakh/crore vocabulary prompt (chunks recordings over the upload limit). */
+export async function transcribeWhisper(filePath: string, mimeType: string): Promise<Transcript> {
   const size = (await fs.promises.stat(filePath)).size;
 
   if (size <= config.whisperMaxBytes) {

@@ -42,7 +42,7 @@ Pooja is the agent you talk to; she orchestrates five specialists, each with one
 | Specialist | Job | Works | Model | Code |
 |---|---|---|---|---|
 | **Pooja** | The voice agent: understands the request, decides which specialist to call, reads actions back, waits for yes | Live (the agent) | Groq gpt-oss-120b tool calling (fallbacks gpt-oss-20b, qwen3.8-27b); Agora + Deepgram + Murf Falcon | `voice/agent.ts` `voiceTurn()` |
-| **Scribe** | Listens: recording → timestamped transcript | Background | Groq whisper-large-v3-turbo | `pipeline/transcribe.ts` |
+| **Scribe** | Listens: recording → timestamped transcript | Background | Murf Finch finch_indic_1.0 (Groq Whisper fallback) | `pipeline/transcribe.ts`, `pipeline/finch.ts` |
 | **Analyst** | Extracts decisions, owners, due dates, numbers, key moments, follow-ups (strict JSON, date checks) | Background | Groq gpt-oss-20b → qwen3.8-27b | `pipeline/extract.ts`, `pipeline/dates.ts` |
 | **Lens** | Reads slides, screenshots and PDFs, including charts and tables | Background (when a file is shared) | Groq qwen3.8-27b vision; unpdf for PDFs | `pipeline/attachments.ts`, `pipeline/documents.ts` |
 | **Librarian** | Remembers and retrieves: indexes everything in pgvector, finds, cites, briefs | Live, as Pooja's tools `search_knowledge`, `get_meeting_details`, `get_open_items`, `brief_me`, `list_recent_meetings` | Local MiniLM embeddings + pgvector | `voice/data.ts`, `voice/tools.ts`, `pipeline/chunk.ts` |
@@ -102,8 +102,8 @@ A voice proposal can also be approved from the "What Tatva is doing" panel:
 ### Offline pipeline (what fills the knowledge base)
 
 `server/src/pipeline/process.ts` `processMeeting()`: store audio (Supabase
-Storage) → `transcribe()` (Groq Whisper `whisper-large-v3-turbo`, ffmpeg chunks
-of 10 min for files over 24 MB) → `extractKnowledge()` (Groq `gpt-oss-120b`,
+Storage) → `transcribe()` (Murf Finch, falling back to Groq Whisper
+`whisper-large-v3-turbo` with ffmpeg chunks of 10 min for files over 24 MB; see 2.2a) → `extractKnowledge()` (Groq `gpt-oss-120b`,
 strict JSON schema) → `saveKnowledge()` (tables) → `indexKnowledge()`
 (`buildChunks()` + `embed()` → `knowledge_chunks`) → `createKnowledgeDoc()`
 (Google Doc via Composio). One heavy job at a time (`pipeline/jobs.ts`).
@@ -234,6 +234,16 @@ Long meetings (over `LLM_MAX_TRANSCRIPT_CHARS` = 10,000 chars) are extracted in
 parts ("This is part 1 of 3 … Extract only what is in this part.") and then
 merged ("Merge them into a single result for the whole meeting…"), with the
 partial results also fenced in `<data>`.
+
+### 2.2a Speech-to-text: Murf Finch, Whisper fallback
+
+`transcribe()` in `server/src/pipeline/transcribe.ts` picks the provider (`STT_PROVIDER=finch|groq`, default `finch`):
+
+- **Finch** (`server/src/pipeline/finch.ts`): ffmpeg decodes the WebM/Opus recording to 16 kHz mono WAV on disk (Finch rejects WebM), then `POST https://in.api.murf.ai/v1/transcription/speech-to-text` (multipart, `api-key` header) with `model=finch_indic_1.0`, `language_code=en_IN` (`FINCH_LANGUAGE`; `auto` wrote names like Rahul in Devanagari in testing), `timestamps_granularity=word`, `bvc=true` (`FINCH_BVC`) and one `keyterms` field per keyword. The file is uploaded as a disk-backed Blob (`fs.openAsBlob`), never read into memory. Finch holds the request up to 10 min; past that it returns a `transcription_id` that is polled.
+- **Keywords** (`server/src/pipeline/keywords.ts`): lakh, crore, Tatva, the profile name, contact names and recent action-item owners (max 50). The fuzzy owner matching after extraction stays as the safety net.
+- **Segments** (`server/src/pipeline/finch-segments.ts`): Finch's `text` is formatted but its `words` are raw lowercase, so the formatted text is aligned back to the word timestamps and cut into sentence segments, the same `{ start, end, text }` shape Whisper produced. Extraction, RAG and Pooja are unchanged.
+- **Fallback:** any Finch error (bad key, out of credits, 4xx/5xx, timeout, no speech) runs Groq Whisper instead. Each meeting writes an `activity_log` row (`tool: transcribe`, `args.provider`, `args.fallback_reason`), shown in the Tracker activity log as "Transcribed with Murf Finch".
+- **Compare:** `pnpm --dir server compare:stt <meeting-id | file | --latest>` runs one recording through both and prints them side by side.
 
 The Whisper vocabulary prompt (`server/src/pipeline/transcribe.ts`
 `WHISPER_PROMPT`): `Indian English work meeting. Amounts use lakh and crore, for example 2 lakh rupees, 45 lakh, 1.5 crore, 40,000 rupees a month. Names like Priya, Rahul, Meera, Anil.`

@@ -43,7 +43,7 @@ action, and the knowledge it uses was built from a recording.
    it; `resolveMeeting()` and `resolveContact()` map spoken names to records.
 
 8. **`server/src/pipeline/process.ts`**: how a recording becomes knowledge:
-   store audio, Whisper, extraction, tables, chunks + embeddings, Google Doc.
+   store audio, Finch speech-to-text (Whisper fallback), extraction, tables, chunks + embeddings, Google Doc.
    One job at a time, a heartbeat, and automatic resume after a restart.
 
 9. **`server/src/pipeline/extract.ts`**: the extraction prompt and strict JSON

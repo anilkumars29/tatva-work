@@ -42,9 +42,9 @@ export const SPECIALISTS: Specialist[] = [
     name: 'Scribe',
     role: 'Listens: turns the meeting recording into a timestamped transcript.',
     works: 'background pipeline',
-    model: 'Groq whisper-large-v3-turbo (Indian-English vocabulary prompt)',
+    model: 'Murf Finch finch_indic_1.0 (en_IN, keyword boosting, background voice cancellation); Groq whisper-large-v3-turbo as the automatic fallback',
     tools: [],
-    code: ['server/src/pipeline/transcribe.ts transcribe()'],
+    code: ['server/src/pipeline/transcribe.ts transcribe()', 'server/src/pipeline/finch.ts', 'server/src/pipeline/keywords.ts'],
   },
   {
     id: 'analyst',

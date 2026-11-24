@@ -54,7 +54,7 @@ Pooja is the voice agent you talk to, and she orchestrates the specialists:
 
 | Specialist | Job |
 |---|---|
-| **Scribe** | Listens: turns the recording into a timestamped transcript (Groq Whisper) |
+| **Scribe** | Listens: turns the recording into a timestamped transcript (Murf Finch `finch_indic_1.0`, Groq Whisper as the fallback) |
 | **Analyst** | Extracts decisions, owners, due dates, numbers and follow-ups (Groq gpt-oss, strict JSON) |
 | **Lens** | Reads slides, screenshots and PDFs, including charts (Groq vision) |
 | **Librarian** | Remembers and retrieves: pgvector search with citations, briefings |
@@ -89,7 +89,7 @@ Scribe, Analyst and Lens work in the background when a recording or file arrives
                             ▼      /tatva/* proxy (adds server key)                         │
               ┌───────────────────── Tatva server (Node + Express, Render) ◄────────────────┘
               │  /api/*  meetings, search, actions, tracker      /v1/chat/completions (voice agent)
-              │  pipeline: Whisper ► extraction ► chunks ► embeddings ► Google Doc
+              │  pipeline: Finch STT ► extraction ► chunks ► embeddings ► Google Doc
               │  voice: retrieval ► Groq tool calling ► pending action ► confirm ► Composio
               ▼
    Supabase (Postgres + pgvector + Storage)    Groq (Whisper, gpt-oss, vision)    Composio (Gmail, Calendar,
@@ -106,7 +106,7 @@ Scribe, Analyst and Lens work in the background when a recording or file arrives
 ## Features
 
 - **Recording:** one-click record of any meeting tab plus your microphone, with local backup; server presets (Cloud / Local / Custom).
-- **Meeting knowledge:** Groq Whisper transcription (chunked for long files), strict-JSON extraction of title, summary, decisions, action items with owners and due dates, numbers, key moments and follow-ups; dates checked deterministically.
+- **Meeting knowledge:** Murf Finch transcription (`finch_indic_1.0`, Indian English, keyword boosting with your contacts' names plus lakh/crore, background voice cancellation), falling back to Groq Whisper automatically (chunked for long files); strict-JSON extraction of title, summary, decisions, action items with owners and due dates, numbers, key moments and follow-ups; dates checked deterministically.
 - **Meeting page:** audio with waveform and key-moment pins, searchable transcript that seeks the audio, Google Doc, email / Slack / calendar buttons, attachments.
 - **Attachments:** drop, paste (Ctrl+V) or upload slides, screenshots and PDFs; a vision model reads text and charts; Pooja cites them by name.
 - **Knowledge Base:** semantic search across meetings, attachments and company PDFs.
@@ -136,7 +136,7 @@ Details and known gaps: [docs/AGENT.md](docs/AGENT.md).
 |---------|--------|
 | Voice | Agora Conversational AI Engine (`agora-agents`, `agora-rtc-react`, `agora-rtm`, `agora-agent-client-toolkit`, `agora-agent-uikit`), Deepgram `nova-3` `en-IN`, **Murf Falcon** TTS `en-IN` |
 | LLM | Groq `openai/gpt-oss-120b` (voice tool calling and extraction), `gpt-oss-20b` fallback, `qwen/qwen3.8-27b` vision |
-| Speech-to-text (recordings) | Groq `whisper-large-v3-turbo` |
+| Speech-to-text (recordings) | Murf Finch `finch_indic_1.0` (file transcription); Groq `whisper-large-v3-turbo` fallback |
 | Embeddings | Local transformers.js `Xenova/all-MiniLM-L6-v2` (384 dims) |
 | Data | Supabase Postgres + pgvector (HNSW, cosine) + Storage |
 | Actions | Composio: Gmail, Google Calendar, Slack, Google Sheets, Google Docs |
